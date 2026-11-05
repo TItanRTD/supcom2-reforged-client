@@ -2,7 +2,7 @@
 
 Reforged is an independent community project for Supreme Commander 2. The
 Windows client provides multiplayer lobbies, matchmaking, a map browser, a
-replay library, and a research tree editor.
+replay library, and balancing.
 
 This repository is a source snapshot of client version **0.33.6**. It contains
 the Electron desktop code, renderer, and shared and local server code used by
