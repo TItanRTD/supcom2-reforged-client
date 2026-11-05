@@ -1,2 +1,40 @@
-# supcom2-reforged-client
-Community client for Supreme Commander 2 Reforged.
+# Supreme Commander 2 Reforged Client
+
+Reforged is an independent community project for Supreme Commander 2. The
+Windows client provides multiplayer lobbies, matchmaking, a map browser, a
+replay library, and a research tree editor.
+
+This repository is a source snapshot of client version **0.33.6**. It contains
+the Electron desktop code, renderer, and shared and local server code used by
+the client. This snapshot supports source review, compilation, and tests.
+
+The playable client requires the separately distributed Reforged installer,
+its native integration resources, and a supported Steam installation of
+Supreme Commander 2. The installer, native gameplay payloads, game-derived
+fixtures and artwork, and production deployment files are excluded. The
+Reforged playtest still handles installer access. See the [project
+website](https://supcom2reforged.com/) for project information.
+
+## Build and test
+
+Use Node.js 24.15 or a newer 24.x release. From the repository root, run:
+
+```sh
+npm ci --ignore-scripts
+npm test
+```
+
+The tests compile the desktop, renderer, and supporting code, then exercise
+Steam lobby links, local map parsing, and replay library behavior using
+synthetic fixtures.
+
+## License
+
+The project code is available under the [MIT license](LICENSE).
+[Vendored dependency notices](src/server/vendor/LICENSES.txt) apply to their
+respective dependencies.
+
+Supreme Commander 2 © 2010 Square Enix, Inc. All rights reserved. SUPREME
+COMMANDER is a registered trademark of Square Enix, Inc. Reforged is an
+independent community project and is not affiliated with Square Enix or Gas
+Powered Games.
