@@ -19,7 +19,18 @@ diff --git a/tests/classic-handoff/tests/engine.lua b/tests/classic-handoff/test
  bps={
   uub0001={BlueprintId='uub0001',Categories={'FACTORY','UIBASICSORTCATEGORY'},General={UnitName='Land Factory'},BuildIconSortPriority=1},
   uub0202={BlueprintId='uub0202',Categories={'SHIELD','UIADVANCEDSORTCATEGORY'},General={UnitName='Shield'},BuildIconSortPriority=2},
-@@ -69,13 +69,15 @@
+@@ -56,6 +56,10 @@
+ function GetUnitBlueprintByName(id)return assert(bps[id],id)end
+ function GetUnitCommandData()return {},{},ids end
+ function EntityCategoryGetUnitList(mask)return mask end
++function EntityCategoryContains(mask,id)
++ if type(mask)=='table'then for _,item in ipairs(mask)do if item==id then return true end end end
++ return false
++end
+ function IssueBlueprintCommand(command,id,count,clear)issued[#issued+1]={command=command,id=id,count=count,clear=clear}end
+ function PlaySound()end
+ function GetSimTicksPerSecond()return 10 end
+@@ -69,13 +73,15 @@
  retailMapper=keymapper.GetKeyMappings
  local editor={IsOpen=function()return editorOpen or false end,Toggle=function()editorOpen=not editorOpen end,Close=function()editorOpen=false end}
  local controls={Close=function()return false end,Begin=function(kind)issued[#issued+1]='custom:'..kind end,PriorityFactory=function(id,n)issued[#issued+1]={priority=id,count=n};return true end}
@@ -210,3 +221,45 @@ diff --git a/tests/test-stock-orders.cjs b/tests/test-stock-orders.cjs
   const result=builder.build(input('ui.scd'),input('toc.win.bdf'),input('ui.scd.enc'),{layout:true,hud:lua,hudScale:1,replayPresentation:true,replaySimulationRevision:revision,gameplay:p});
   const bundle=ui.readZip(result.archive,4096),callback=bundle.find(e=>norm(e)==='lua/sim/simcallbacks.lua');
   assert.equal(!!callback,wantOrders,revision+' stock replay callbacks');assert.equal(result.manifest.hud.stockOrders,wantOrders);assert.equal(result.manifest.hud.originalSimulation,!wantOrders);
+diff --git a/tests/test-launch.cjs b/tests/test-launch.cjs
+--- a/tests/test-launch.cjs
++++ b/tests/test-launch.cjs
+@@ -1,8 +1,8 @@
+ 'use strict';
+ const fs=require('node:fs'),fsp=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+-const app=process.env.PACKAGED_APP||path.resolve('work-0376/app');
++const app=process.env.PACKAGED_APP||path.resolve('work-0377/app');
+ const {prepareNativeHostCore}=require(path.join(app,'dist/node/desktop/native-host.js'));
+-const native=process.env.PACKAGED_NATIVE||path.resolve('work-0376/payload/resources/native');
++const native=process.env.PACKAGED_NATIVE||path.resolve('work-0377/payload/resources/native');
+ // Native binaries embed Windows diagnostic names. Substitute that boundary
+ // while exercising the desktop preparation workflow on this Linux host.
+ const windowsLog='C:\\Reforged\\game.log';
+@@ -36,19 +36,24 @@
+    const badgeReturn = hud.rawAt+0x9de;
+    assert.equal(0x01da59e3 + candidate.readInt32LE(badgeReturn+1),0x01da8f00);
+    assert(candidate.subarray(hud.rawAt+0x3f00,hud.rawAt+0x3f00+58).equals(fs.readFileSync(native+'/hud/scoreboard-badges-x86.bin')));
++   const renderer=image.fileOffset(0x01daa000-image.base);
++   assert.equal(candidate[renderer+0x195],13);
++   const table=image.fileOffset(candidate.readUInt32LE(renderer+0x205)-image.base);
++   const caster=image.fileOffset(candidate.readUInt32LE(table+13*4)-image.base);
++   assert.equal(candidate.toString('ascii',caster,candidate.indexOf(0,caster)),'/textures/ui/common/pc/frontend/rfbadge_13.dds');
+    console.log(mode,'normal preparation completed',JSON.stringify(stages.filter(s=>/executable|interface|manifest/.test(s))),Object.keys(result));
+   }
+   const replay=await prepareNativeHostCore(path.join(bin,'SupremeCommander2.exe'),native,path.join(temp,'runs'),
+    undefined,false,true,undefined,true,undefined,false,undefined,false,{replayPresentation:true,
+-    replayPlayers:[{name:'TestCommander',team:1,ai:false,observer:false,startPosition:4,rating:16.2,badgeCode:163}]});
++    replayPlayers:[{name:'TestCommander',team:1,ai:false,observer:false,startPosition:4,rating:16.2,badgeCode:211}]});
+   const bytes=await fsp.readFile(replay.candidatePath);
+   const image=require(native+'/host/direct-host.cjs').pe(bytes);
+   const ratings=image.fileOffset(0x01d90ea0-image.base);
+   assert.ok(Math.abs(bytes.readFloatLE(ratings+4*4)-16.2)<0.0001);
+-  assert.equal(bytes[image.fileOffset(0x01d90ef8-image.base)+4],163);
++  assert.equal(bytes[image.fileOffset(0x01d90ef8-image.base)+4],211);
+   const replayProbe=path.join(path.dirname(path.dirname(replay.candidatePath)),'gamedata/supcom2_revival_ui_probe.scd');
+   const archive=require(native+'/lobby/supcom2-ui.cjs').readZip(await fsp.readFile(replayProbe),4096);
+-  assert(archive.some(file=>file.name.toLowerCase().replaceAll('\\','/').endsWith('/rfbadge_10.dds')));
++  assert(archive.some(file=>file.name.toLowerCase().replaceAll('\\','/').endsWith('/rfbadge_13.dds')));
+   console.log('The prepared replay executable contains the recorded rating and badge IDs, and its UI archive contains the badge art.');
+   const oldRoot=path.dirname(path.dirname(lastResult.candidatePath));
+   const oldProbe=path.join(oldRoot,'gamedata/supcom2_revival_ui_probe.scd');
