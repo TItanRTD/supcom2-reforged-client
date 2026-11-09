@@ -1,0 +1,212 @@
+diff --git a/tests/classic-handoff/tests/engine.lua b/tests/classic-handoff/tests/engine.lua
+--- a/tests/classic-handoff/tests/engine.lua
++++ b/tests/classic-handoff/tests/engine.lua
+@@ -18,7 +18,7 @@
+  function w:DisableHitTest()self.hit=false end
+  function w:EnableHitTest()self.hit=true end
+  function w:Hide()self.hidden=true end
+- function w:Show()self.hidden=false end
++ function w:Show()self.hidden=false;if recursiveBuildShow and self.name=='Classic construction'then for _,c in ipairs(self.children)do c:Show()end end end
+  function w:IsHidden()return self.hidden end
+  function w:SetNeedsFrameUpdate(v)self.frameUpdates=v end
+  function w:AcquireKeyboardFocus(v)self.focus=v end
+@@ -43,7 +43,7 @@
+ function IN_AddKeyMapTable(map)if failClassicPublish and map.M and string.find(map.M.action,'Dispatch',1,true)then failClassicPublish=false;error('classic registration failure')end;if failPublication and failPublication>0 then failPublication=failPublication-1;error('registration failure')end;published=map end
+ function UIIsConstructionEnabled()return true,true,2,1000 end
+ function DiskGetFileInfo()return true end
+-function GetSelectedUnits()return selected and {{GetEntityId=function()return selectionID end,GetBlueprint=function()return {BlueprintId=builderID}end,IsInCategory=function(_,s)return s=='FACTORY' and factorySelected end}}or{}end
++function GetSelectedUnits()return selected and {{GetEntityId=function()return selectionID end,GetArmy=function()return 1 end,GetBlueprint=function()return {BlueprintId=builderID}end,IsInCategory=function(_,s)return s=='FACTORY' and factorySelected end}}or{}end
+ bps={
+  uub0001={BlueprintId='uub0001',Categories={'FACTORY','UIBASICSORTCATEGORY'},General={UnitName='Land Factory'},BuildIconSortPriority=1},
+  uub0202={BlueprintId='uub0202',Categories={'SHIELD','UIADVANCEDSORTCATEGORY'},General={UnitName='Shield'},BuildIconSortPriority=2},
+@@ -69,13 +69,15 @@
+ retailMapper=keymapper.GetKeyMappings
+ local editor={IsOpen=function()return editorOpen or false end,Toggle=function()editorOpen=not editorOpen end,Close=function()editorOpen=false end}
+ local controls={Close=function()return false end,Begin=function(kind)issued[#issued+1]='custom:'..kind end,PriorityFactory=function(id,n)issued[#issued+1]={priority=id,count=n};return true end}
+-local observer={CloseTransient=function()return false end,ToggleResearch=function()issued[#issued+1]='observer research'end}
++researchSample={}
++local observer={Samples=function()return {[1]={research=researchSample}}end,CloseTransient=function()return false end,ToggleResearch=function()issued[#issued+1]='observer research'end}
+ local commandmode={GetCommandMode=function()return commandMode,commandData end,StartCommandMode=function(mode,data)commandMode=mode;commandData=data;issued[#issued+1]={mode=mode,id=data.name}end,EndCommandMode=function()commandMode=nil end}
+ local common={CreateText=function(p,s,size,font)local w=widget(p);w.text=s;w.fontSize=size;return w end,UIRP_PostGlow=7,UIFile=function(p)return '/textures/ui/common'..p end}
+ externals={
+  ['/lua/user/prefs.lua']=prefs,['/lua/keymap/keymapper.lua']=keymapper,
+  ['/lua/keymap/keyactions.lua']=actions,['/lua/keymap/defaultKeyMap.lua']=stock,['/lua/keymap/keydescriptions.lua']={keyDescriptions={}},
+  ['/lua/ui/game/buildmodedata.lua']=builddata,
++ ['/lua/ui/game/reforged_construction_costs.lua']=researchData or {},
+  ['/lua/ui/uiutil.lua']=common,
+  ['/lua/maui/group.lua']={Group=widget},['/lua/maui/edit.lua']={Edit=widget},
+  ['/lua/maui/bitmap.lua']={Bitmap=function(p,t)local w=widget(p);w.texture=t;return w end},
+diff --git a/tests/classic-handoff/tests/test_interface.py b/tests/classic-handoff/tests/test_interface.py
+--- a/tests/classic-handoff/tests/test_interface.py
++++ b/tests/classic-handoff/tests/test_interface.py
+@@ -18,6 +18,8 @@
+    loader(z.read('uncompiled\\lua\\keymap\\defaultKeyMap.lua').decode('cp1252'),g.stock)
+   with zipfile.ZipFile(GAME/'gamedata/lua.scd')as z:
+    loader(convert(z.read('lua\\ui\\game\\buildmodedata.lua')),g.builddata)
++  self.lua.execute('researchData={}')
++  loader((ROOT.parents[1]/'build/construction-costs.lua').read_text(),g.researchData)
+   self.lua.execute((ROOT/'tests/engine.lua').read_text())
+   self.g=g
+  def runlua(self,text):return self.lua.execute(text)
+@@ -35,7 +37,7 @@
+  def test_uses_retail_tiers_and_preserves_added_items(self):
+   self.classic();self.runlua("assert(view.cells[1].item.id=='uub0001');view:SetTier(2);assert(view.cells[1].item.id=='uub0202');view:SetTier(3);assert(view.cells[1].item.id=='uub0011');assert(view.cells[2].item.id=='new_exp')")
+  def test_factory_tabs_and_defenses_use_distinct_slots(self):
+-  self.classic()
++  self.runlua('recursiveBuildShow=true');self.classic()
+   self.runlua("""
+     local model=import('/lua/ui/game/reforged_classicmodel.lua')
+     local basic={id='uub0202',bp={Categories={'UIBASICSORTCATEGORY'}}}
+@@ -43,9 +45,9 @@
+     factorySelected=true
+     ids={'new_basic','uum0111','new_exp'}
+     view:Update(true)
+-    assert(view.tabs[1].caption.text=='Units' and view.tabs[2].caption.text=='Factory Add-ons' and view.tabs[3].hidden)
++    assert(view.tabs[1].caption.text=='Units' and view.tabs[2].caption.text=='Factory Add-ons' and view.tabs[3].hidden and view.tabs[3].caption.hidden)
+     assert(#model.Options(view.items,1,view.builders,true)==2)
+-    assert(view:SetTier(2) and view.cells[1].item.id=='uum0111' and not view.cells[2].item)
++    assert(view:SetTier(2) and view.cells[1].item.id=='uum0111' and not view.cells[2].item and view.cells[2].icon.hidden)
+     assert(not view:SetTier(3))
+     factorySelected=false
+     ids={'rfip01','uib0101','uib0102','uib0106'}
+@@ -66,6 +68,34 @@
+         assert(pages==1 and cells[5].id==aa and cells[9].id==light and cells[10].id==heavy)
+         if faction[1]=='ui' then assert(cells[6].id=='uib0106') end
+     end
++  """)
++ def test_cost_tooltip_updates_when_research_completes(self):
++  self.runlua("""
++    function ParseEntityCategory(expression)return expression end
++    function EntityCategoryContains(mask,id)
++        if type(mask)=='table'then for _,item in ipairs(mask)do if item==id then return true end end;return false end
++        return mask=='UEF MOBILE ENGINEER -EXPERIMENTAL -ESCAPEPOD' and id=='uul0001'
++    end
++    bps.uub0001.Economy={MassValue=200,EnergyValue=500,BuildTime=25}
++  """)
++  self.classic()
++  self.runlua("""
++    view.cells[1]:OnRolloverEvent('enter')
++    assert(view.tipCost.text=='Mass: 200' and view.tipEnergy.text=='Energy: 500')
++    researchSample.UBB_BUILDCOST=1
++    view:Update(true)
++    assert(view.tipCost.text=='Mass: 190' and view.tipEnergy.text=='Energy: 475')
++    view:SetTier(2)
++    assert(view.tooltip.hidden and view.cells[3].icon.hidden)
++    local found;assert(layout.SetMode('reforged'));modern=api.Create(parent);modern:Update(true)
++    for _,cell in ipairs(modern.cells)do
++        if cell.item and cell.item.id=='uub0001' then
++            cell:OnRolloverEvent('enter')
++            assert(modern.tipCost.text=='Cost:  190 Mass   475 Energy')
++            found=true;break
++        end
++    end
++    assert(found)
+   """)
+  def test_classic_build_mode_uses_blueprint_keys_across_pages(self):
+   self.classic();self.runlua("keys.Dispatch('B');assert(view.buildKeys);keys.Dispatch('3');assert(view.tier==3);keys.Dispatch('L');assert(issued[#issued].id=='uub0011');assert(issued[#issued].mode=='build');keys.Dispatch('Esc');assert(not view.buildKeys)")
+diff --git a/tests/site-shell.cjs b/tests/site-shell.cjs
+--- a/tests/site-shell.cjs
++++ b/tests/site-shell.cjs
+@@ -158,6 +158,19 @@
+             assert.ok(view.document.querySelector('#site-account a[href="/profile"]'));
+             assert.ok(!view.document.querySelector('a[href^="/client/index.html"]'));
+         }
++        const rankingPage = await open(target, web);
++        await waitFor(() => rankingPage.document.querySelector('#rankings table'));
++        const filters = rankingPage.document.querySelector('#ranking-filters');
++        assert.equal(filters.querySelector('button'), null);
++        filters.elements.mode.value = 'ladder';
++        filters.elements.mode.dispatchEvent(new rankingPage.window.Event('change', { bubbles: true }));
++        await waitFor(() => rankingPage.window.location.search.includes('mode=ladder') &&
++            !rankingPage.document.querySelector('#rankings').hasAttribute('aria-busy'));
++        filters.elements.ruleset.value = 'vanilla-plus';
++        filters.elements.ruleset.dispatchEvent(new rankingPage.window.Event('change', { bubbles: true }));
++        await waitFor(() => rankingPage.window.location.search.includes('ruleset=vanilla-plus') &&
++            !rankingPage.document.querySelector('#rankings').hasAttribute('aria-busy'));
++        assert.ok(rankingPage.document.querySelector('#rankings table'));
+         const replayPage = await open('/replays', web);
+         await waitFor(() => replayPage.document.querySelector('[data-replay]'));
+         replayPage.document.querySelector('[data-replay]').click();
+@@ -171,7 +184,7 @@
+         assert.ok(!denied.document.querySelector('#site-account a[href="/admin"]'));
+         assert.equal((await request('/api/admin/status', { headers: authorization(player) })).status, 403);
+ 
+-        for (const asset of ['maps', 'replays']) {
++        for (const asset of ['maps', 'replays', 'leaderboard']) {
+             const art = await request('/client/assets/site-' + asset + '.webp');
+             assert.equal(art.status, 200);
+             assert.equal(art.headers.get('content-type'), 'image/webp');
+diff --git a/tests/test-assets.cjs b/tests/test-assets.cjs
+--- a/tests/test-assets.cjs
++++ b/tests/test-assets.cjs
+@@ -12,10 +12,10 @@
+ equal(released.overrides,frozen0374.overrides,'Exact frozen 0.37.4 overrides');
+ equal(old.scripts,frozen.scripts,'Exact frozen 0.37.3 scripts');equal(old.textures,frozen.textures,'Exact frozen textures');for(const e of old.overrides){const same=current.overrides.find(x=>norm(x)===norm(e));assert(same);if(!/^textures\/ui\/common\/icons\/hud\/(pc_units|units)\//.test(norm(e)))assert(same.data.equals(e.data),'Unrelated override changed '+e.name);}
+ for(const t of old.textures)assert(t.data.equals(current.textures.find(n=>norm(n)===norm(t)).data),'Existing texture changed '+t.name);
+-assert.equal(current.textures.length,old.textures.length+154);
++assert.equal(current.textures.length,old.textures.length+159);
+ assert.deepEqual(current.textures.filter(t=>/\/rfq_/.test(t.name)).map(t=>t.name.split('/').at(-1).slice(4,-4)).sort(),require(native+'/hud/queue-icons.json'));
+-const allowedRoots=['reforged_keys','reforged_gridkeys','reforged_classickeys','reforged_classicmodel','reforged_classicbuild','reforged_interfacehud','reforged_hotkeys','reforged_window','reforged_build','reforged_layout','reforged_hud','reforged_stats','reforged_converterui','reforged_menubutton','reforged_controls','reforged_nativehud','reforged_replay','reforged_observer','reforged_replaymap'];
+-const allowed=new Set(allowedRoots.map(n=>'lua/ui/game/'+n+'.lua'));allowed.add('lua/sim/reforged_commands.lua');allowed.add('lua/ui/game/rf_awareness_notices.lua');allowed.add('lua/ui/game/rf_awareness_controller.lua');
++const allowedRoots=['reforged_keys','reforged_gridkeys','reforged_classickeys','reforged_classicmodel','reforged_classicbuild','reforged_interfacehud','reforged_hotkeys','reforged_window','reforged_build','reforged_layout','reforged_hud','reforged_stats','reforged_converterui','reforged_menubutton','reforged_controls','reforged_ranges','reforged_buildcost','reforged_nativehud','reforged_replay','reforged_observer','reforged_replaymap'];
++const allowed=new Set(allowedRoots.map(n=>'lua/ui/game/'+n+'.lua'));allowed.add('lua/sim/reforged_commands.lua');allowed.add('lua/ui/game/reforged_construction_costs.lua');allowed.add('mods/dlc1/shadow/lua/ui/game/reforged_construction_costs.lua');allowed.add('lua/ui/game/rf_awareness_notices.lua');allowed.add('lua/ui/game/rf_awareness_controller.lua');
+ function descendants(bundle,name){const map=new Map(bundle.scripts.map(f=>[norm(f),f]));while(map.has(name)){allowed.add(name);const match=map.get(name).data.toString().match(/^doscript\('\/([^']+)',getfenv\(1\)\)/);if(!match)break;name=match[1].toLowerCase();}}
+ for(const root of [...allowed])for(const bundle of [old,current])descendants(bundle,root);
+ const changed=[];for(const file of current.scripts){const before=old.scripts.find(x=>norm(x)===norm(file));if(!before||!file.data.equals(before.data)){assert(allowed.has(norm(file))||/^textures\/ui\/common\/icons\//.test(norm(file)),'Unexpected changed simulation/feature script '+file.name);changed.push(norm(file));}}
+@@ -23,14 +23,15 @@
+ assert.equal(new Set(current.scripts.map(norm)).size,current.scripts.length);
+ const dds=require(native+'/hud/dds-format.cjs');
+ for(const t of current.textures.filter(t=>!old.textures.some(b=>norm(b)===norm(t)))){
++ if (/rf_ability_area_/.test(t.name)) continue;
+  assert(/rfq_[a-z0-9]+\.dds$/.test(t.name));const d=t.data,shape=dds.validateDDS(d,t.name);assert(shape.width<=256&&shape.height<=256);
+  for(let at=128;at+16<=d.length;at+=16){assert.notEqual(d.readUInt16LE(at+8),65535);assert.equal(d.readUInt16LE(at+10),d.readUInt16LE(at+8));assert.equal(d.readUInt32LE(at+12),0);}
+ }
+ 
+ const compose=require(native+'/hud/replay-presentation.cjs').compose,replays=[],replaySources=new Map();
+-for(const revision of ['0368','0370','0371','0372','0373','0374','0375','current','legacy']){
++for(const revision of ['0368','0370','0371','0372','0373','0374','0375','0376','current','legacy']){
+  const legacy=revision==='legacy',selected=legacy?current:revision==='current'?current:require(native+'/hud/frozen-v'+revision+'.cjs').assets(lua,1.125);
+- const result=compose(current,selected,entries,{legacy,revision:legacy?'retail':revision});assert.equal(result.manifest.mode,'replay-presentation-0376');assert(result.manifest.telemetryOnly);
++ const result=compose(current,selected,entries,{legacy,revision:legacy?'retail':revision});assert.equal(result.manifest.mode,'replay-presentation-0377');assert(result.manifest.telemetryOnly);
+  for(const row of result.manifest.delegatedClasses){const source=(legacy?entries:selected.scripts).find(e=>norm(e)===row.path),saved=result.scripts.find(e=>norm(e)===row.delegatedPath);assert(source.data.equals(saved.data),revision+' '+row.path);}
+  for(const e of result.scripts.filter(e=>norm(e).endsWith('.lua')&&e.data.subarray(0,4).toString('hex')!=='1b4c7561'))replaySources.set(e.name+':'+require('node:crypto').createHash('sha256').update(e.data).digest('hex'),[e.name,e.data.toString('base64')]);
+  replays.push({revision,scripts:result.scripts.length});
+diff --git a/tests/test-replay-scoreboard.cjs b/tests/test-replay-scoreboard.cjs
+--- a/tests/test-replay-scoreboard.cjs
++++ b/tests/test-replay-scoreboard.cjs
+@@ -12,6 +12,13 @@
+ const { CLIENT_VERSION } = require(app+'/dist/node/shared/model');
+ 
+ (async () => {
++    const { scoreboardBadgeCode } = require(desk+'lobby-badge-data');
++    const { recognitionIds, playerBadges, thresholdsFrom } = require(app+'/dist/node/server/player-badges');
++    assert(recognitionIds.has('caster'));
++    const badges = playerBadges({ recognition: { caster: 'Reforged tournament broadcasts' } }, [], thresholdsFrom());
++    assert.equal(badges[0].id, 'caster');
++    assert.equal(scoreboardBadgeCode(badges), 0xd0);
++    assert.equal(encodeReplayScoreboard([{name:'Caster',team:1,startPosition:0,badgeCode:0xd0}])[0x6f8], 0xd0);
+     const temp = await fs.mkdtemp(path.join(os.tmpdir(), 's2r-replay-scoreboard-'));
+     try {
+         let now = 10000, rating = 16.2;
+diff --git a/tests/test-stock-orders.cjs b/tests/test-stock-orders.cjs
+--- a/tests/test-stock-orders.cjs
++++ b/tests/test-stock-orders.cjs
+@@ -5,6 +5,9 @@
+ const p=require(A+'/dist/node/server/gameplay').patchFor('vanilla-1.260-iwbp','1.0.0');
+ const assets=require(N+'/hud/assets.cjs'),old=require(N+'/hud/frozen-v0372.cjs').assets(lua,1,undefined,p),stock=assets.assets(lua,1,undefined,p);
+ assert(stock.manifest.stockOrders&&stock.manifest.originalBalance);
++const priorStock=require(N+'/hud/frozen-v0376.cjs').assets(lua,1,undefined,p);
++assert.equal(stock.manifest.gameplay.simulationHash,priorStock.manifest.gameplay.simulationHash,'Construction display data must stay out of the stock simulation fingerprint');
++
+ const allowed=new Set(['lua/sim/aibrain.lua','mods/dlc1/shadow/lua/sim/aibrain.lua','lua/rf027_simcallbacks_original.lua','lua/sim/simcallbacks.lua','lua/sim/reforged_commands.lua','lua/sim/reforged_reclaim.lua','lua/sim/reforged_stock_orders.lua']);
+ const isUI=require(N+'/hud/replay-presentation.cjs').isUI;
+ for(const e of stock.scripts.filter(e=>!isUI(norm(e)))){const before=old.scripts.find(x=>norm(x)===norm(e));if(!before||!e.data.equals(before.data))assert(allowed.has(norm(e)),'Unexpected stock simulation override: '+e.name);}
+@@ -18,7 +21,7 @@
+ assert(!by('lua/ui/game/reforged_controls.lua').toString().includes('if ReforgedRetailGameplay then'));
+ assert(by('lua/ui/game/reforged_converterui.lua').toString().includes('ReforgedRetailGameplay==true'));
+ const builder=require(N+'/lobby/indexed-probe.cjs'),input=n=>fs.readFileSync('recovered-inputs/'+n);
+-for(const [revision,wantOrders]of [['current',true],['0374',true],['0373',true],['0372',false]]){
++for(const [revision,wantOrders]of [['current',true],['0376',true],['0374',true],['0373',true],['0372',false]]){
+  const result=builder.build(input('ui.scd'),input('toc.win.bdf'),input('ui.scd.enc'),{layout:true,hud:lua,hudScale:1,replayPresentation:true,replaySimulationRevision:revision,gameplay:p});
+  const bundle=ui.readZip(result.archive,4096),callback=bundle.find(e=>norm(e)==='lua/sim/simcallbacks.lua');
+  assert.equal(!!callback,wantOrders,revision+' stock replay callbacks');assert.equal(result.manifest.hud.stockOrders,wantOrders);assert.equal(result.manifest.hud.originalSimulation,!wantOrders);

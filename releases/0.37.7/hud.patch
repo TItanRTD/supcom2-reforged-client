@@ -1,0 +1,986 @@
+diff --git a/payload/resources/native/hud/assets.cjs b/payload/resources/native/hud/assets.cjs
+--- a/payload/resources/native/hud/assets.cjs
++++ b/payload/resources/native/hud/assets.cjs
+@@ -9,7 +9,7 @@
+  const scripts=[{name:'lua/ui/game/reforged_keys.lua',data:fs.readFileSync(path.join(__dirname,'reforged_keys.lua'))},{name:'lua/ui/game/reforged_layout.lua',data:Buffer.from(fs.readFileSync(path.join(__dirname,'reforged_layout.lua'),'utf8')+'\nscale = '+scale+'\n')},{name:'lua/ui/game/gamemain_pc.lua',data:fs.readFileSync(path.join(__dirname,'bootstrap.lua'))},{name:'lua/ui/game/rf023_pc_original.lua',data:pc.data},{name:'lua/ui/game/reforged_hud.lua',data:fs.readFileSync(path.join(__dirname,'reforged_hud.lua'))},{name:'lua/ui/game/reforged_build.lua',data:fs.readFileSync(path.join(__dirname,'reforged_build.lua'))}];
+  scripts.push({name:'lua/ui/game/reforged_observer.lua',data:fs.readFileSync(path.join(__dirname,'reforged_observer.lua'))});
+  scripts.push({name:'lua/ui/game/reforged_replay.lua',data:fs.readFileSync(path.join(__dirname,'reforged_replay.lua'))});
+- for(const name of ['geometry','unitinfo','controls','hotkeys','ranges','window','converterui','replaymap','researchview','research_notices','menubutton','experience_guard','performance','gridkeys','classickeys','classicmodel','classicbuild','interfacehud'])scripts.push({name:'lua/ui/game/reforged_'+name+'.lua',data:fs.readFileSync(path.join(__dirname,'reforged_'+name+'.lua'))});
++ for(const name of ['geometry','unitinfo','controls','hotkeys','ranges','window','converterui','replaymap','researchview','research_notices','menubutton','experience_guard','performance','gridkeys','classickeys','buildcost','classicmodel','classicbuild','interfacehud'])scripts.push({name:'lua/ui/game/reforged_'+name+'.lua',data:fs.readFileSync(path.join(__dirname,'reforged_'+name+'.lua'))});
+  scripts.push({name:'lua/ui/game/reforged_nativehud.lua',data:Buffer.concat([Buffer.from('Controls='+require('./research.cjs').literal(require('./native-layout.json').controls)+'\n'),fs.readFileSync(path.join(__dirname,'reforged_nativehud.lua'))])});
+  for(const name of ['commands','reclaim','research_tracking'])scripts.push({name:'lua/sim/reforged_'+name+'.lua',data:fs.readFileSync(path.join(__dirname,'reforged_'+name+'.lua'))});
+  const range=entries.find(e=>e.name.toLowerCase().replaceAll('\\','/')==='lua/ui/game/rangeoverlayparams.lua');assert.ok(range);
+diff --git a/payload/resources/native/hud/overlays-x86.s b/payload/resources/native/hud/overlays-x86.s
+new file mode 100644
+--- /dev/null
++++ b/payload/resources/native/hud/overlays-x86.s
+@@ -0,0 +1,354 @@
++.intel_syntax noprefix
++.code32
++.global overlay_entry
++/* Read-only collection of the retail placement/normal overlay instances.
++ * Existing native extractors retain blueprint, army, recon and interpolation
++ * decisions. Only a scoped append to OUR empty temporary vector is intercepted.
++ * Empty vectors make the retail placement draw return before any GPU operation.
++ * No orders, simulation writes, source-vector writes or persistent entity refs.
++ * Private RW space: 1d94030..3f metadata, 1d94040..49ff 64 x 36-byte records.
++ */
++.equ CONTEXT,0x01d94030
++.equ COUNT,0x01d94034
++.equ COLOR,0x01d94038
++.equ FOCUS,0x01d9403c
++.equ RECORDS,0x01d94040
++overlay_entry:
++ push ebp
++ push ebx
++ push esi
++ push edi
++ sub esp,512
++ mov eax,dword ptr [esp+532]
++ mov ebp,dword ptr [eax+0x7c]
++ mov ebx,dword ptr [ebp+0x1c]
++ mov ecx,dword ptr [ebx+0x24]
++ mov eax,dword ptr [ebx+0x20]
++ sub eax,ecx
++ cmp eax,8
++ jb fallback
++ cmp dword ptr [ecx],4
++ jne fallback
++ push 1
++ push ebx
++ mov eax,0x0041b060
++ call eax
++ add esp,8
++ test eax,eax
++ jz fallback
++ cmp dword ptr [eax],0x4f3a4652 /* RF:O */
++ jne fallback
++ cmp dword ptr [eax+4],0x6c726576 /* verl */
++ jne fallback
++ cmp word ptr [eax+8],0x7961 /* ay */
++ jne fallback
++ cmp byte ptr [eax+10],0
++ je read_record
++ cmp word ptr [eax+10],0x0073 /* s\0 : collect */
++ jne fallback
++ mov dword ptr [CONTEXT],0
++ mov dword ptr [COUNT],0
++ mov ebx,dword ptr [0x018ca63c]
++ test ebx,ebx
++ jz no_data
++ mov eax,dword ptr [ebx+0x4c0]
++ test eax,eax
++ js no_data
++ cmp eax,64
++ jae no_data
++ mov ecx,dword ptr [ebx+0x408]
++ test ecx,ecx
++ jz no_data
++ lea edx,[ecx+eax*4+4]
++ cmp edx,dword ptr [ebx+0x40c]
++ ja no_data
++ cmp dword ptr [ecx+eax*4],0
++ je no_data
++ mov dword ptr [FOCUS],eax
++ mov edi,dword ptr [0x018ca588]
++ test edi,edi
++ jz no_data
++ add edi,0x1a0
++ cmp dword ptr [edi+8],0
++ je no_data
++ /* Use the exact native active-filter synchronization, even while ren_Ranges
++  * is suppressed by the custom renderer. No GPU state is involved here. */
++ lea eax,[ebx+0x534]
++ push eax
++ push edi
++ mov eax,0x009f17e0
++ call eax
++ xor eax,eax
++ mov dword ptr [esp],eax
++ mov dword ptr [esp+4],eax
++ mov dword ptr [esp+8],eax
++ mov dword ptr [esp+12],eax
++ mov dword ptr [CONTEXT],esp
++ /* Placement uses native command descriptor, actual pending blueprint,
++  * preview coordinates and the original extractor/category predicates. */
++ cmp byte ptr [0x01526906],0
++ je normal_filters
++ push 0
++ push 0
++ lea eax,[esp+8]
++ push eax
++ push edi
++ mov ecx,ebx
++ mov eax,0x009f1d60
++ call eax
++normal_filters:
++ cmp byte ptr [ebx+0x4f4],0
++ je normal_start
++ mov eax,ebx
++ mov ecx,esp
++ push esi
++ mov esi,edi
++ mov edx,0x009f1fa0
++ call edx
++ pop esi
++normal_start:
++ mov esi,dword ptr [edi+0x14]
++ cmp esi,dword ptr [edi+0x18]
++ je collected
++ /* Retail entity-query container, including its initial stack allocation. */
++ lea eax,[esp+32]
++ mov dword ptr [esp+16],eax
++ mov dword ptr [esp+20],eax
++ lea edx,[esp+432]
++ mov dword ptr [esp+24],edx
++ mov dword ptr [esp+28],eax
++ push 0x100
++ lea eax,[ebx+0x68]
++ push eax
++ lea eax,[esp+24]
++ mov edx,0x00534de0
++ call edx
++filter_loop:
++ /* Match the retail normal pass's AllIntel/WaypointAbility exclusions. */
++ push 7
++ push 0x1354dec
++ push dword ptr [esi+0x14]
++ push 0
++ mov ecx,esi
++ mov eax,0x0040f600
++ call eax
++ test eax,eax
++ jz next_filter
++ push 15
++ push 0x1394eb8
++ push dword ptr [esi+0x14]
++ push 0
++ mov ecx,esi
++ mov eax,0x0040f600
++ call eax
++ test eax,eax
++ jz next_filter
++ lea eax,[esi+0x48]
++ mov dword ptr [COLOR],eax
++ lea eax,[esp]
++ push eax
++ push esi
++ push dword ptr [0x018c98b0]
++ lea eax,[esp+28]
++ push eax
++ mov eax,0x009f2060
++ call eax
++next_filter:
++ add esi,0x90
++ cmp esi,dword ptr [edi+0x18]
++ jne filter_loop
++ mov eax,dword ptr [esp+16]
++ cmp eax,dword ptr [esp+28]
++ je collected
++ push eax
++ mov eax,0x00efe003
++ call eax
++ add esp,4
++collected:
++ mov dword ptr [CONTEXT],0
++ mov ecx,dword ptr [ebp+0x1c]
++ mov edx,dword ptr [ecx+0x20]
++ mov dword ptr [edx],1
++ mov dword ptr [edx+4],1
++ mov dword ptr [edx+8],3
++ cvtsi2ss xmm0,dword ptr [COUNT]
++ movss dword ptr [edx+12],xmm0
++ mov dword ptr [edx+16],1
++ movzx eax,byte ptr [0x015268b1]
++ mov dword ptr [edx+20],eax
++ add edx,24
++ mov dword ptr [ecx+0x20],edx
++ mov eax,3
++ jmp done
++read_record:
++ mov ecx,dword ptr [ebp+0x1c]
++ mov eax,dword ptr [ecx+0x20]
++ sub eax,dword ptr [ecx+0x24]
++ cmp eax,16
++ jb no_data
++ mov eax,dword ptr [ecx+0x24]
++ cmp dword ptr [eax+8],4
++ jne no_data
++ push 2
++ push ecx
++ mov eax,0x0041b060
++ call eax
++ add esp,8
++ test eax,eax
++ jz no_data
++ xor ecx,ecx
++ xor edx,edx
++parse:
++ movzx ebx,byte ptr [eax+ecx]
++ test ebx,ebx
++ jz parsed
++ sub ebx,48
++ cmp ebx,9
++ ja no_data
++ imul edx,edx,10
++ add edx,ebx
++ inc ecx
++ cmp ecx,2
++ ja no_data
++ jmp parse
++parsed:
++ test edx,edx
++ jz no_data
++ cmp edx,64
++ ja no_data
++ cmp edx,dword ptr [COUNT]
++ ja no_data
++ mov eax,dword ptr [0x018ca63c]
++ test eax,eax
++ jz no_data
++ mov eax,dword ptr [eax+0x4c0]
++ cmp eax,dword ptr [FOCUS]
++ jne no_data
++ dec edx
++ imul edx,edx,36
++ lea esi,[edx+RECORDS]
++ mov ecx,dword ptr [ebp+0x1c]
++ mov edx,dword ptr [ecx+0x20]
++ mov dword ptr [edx],1
++ mov dword ptr [edx+4],1
++ add edx,8
++ mov edi,9
++emit:
++ mov dword ptr [edx],3
++ mov eax,dword ptr [esi]
++ mov dword ptr [edx+4],eax
++ add esi,4
++ add edx,8
++ dec edi
++ jnz emit
++ mov dword ptr [ecx+0x20],edx
++ mov eax,10
++ jmp done
++no_data:
++ mov ecx,dword ptr [ebp+0x1c]
++ mov edx,dword ptr [ecx+0x20]
++ mov dword ptr [edx],0
++ add edx,8
++ mov dword ptr [ecx+0x20],edx
++ mov eax,1
++done:
++ add esp,512
++ pop edi
++ pop esi
++ pop ebx
++ pop ebp
++ ret
++fallback:
++ add esp,512
++ pop edi
++ pop esi
++ pop ebx
++ pop ebp
++ push 0x01da6c00
++ ret
++
++.org 0x400,0x90
++.global overlay_append
++overlay_append:
++ cmp dword ptr [CONTEXT],edi
++ jne original_append
++ cmp dword ptr [esp],0x009f1ebd
++ je capture_build
++ cmp dword ptr [esp],0x009f200a
++ je capture_ability
++ cmp dword ptr [esp],0x009f2197
++ jne original_append
++ pushfd
++ pushad
++ mov esi,dword ptr [COLOR]
++ jmp capture
++capture_build:
++ pushfd
++ pushad
++ lea esi,[ebx+0x48]
++ jmp capture
++capture_ability:
++ pushfd
++ pushad
++ mov esi,dword ptr [0x018ca63c]
++ add esi,0x4fc
++capture:
++ mov ecx,dword ptr [COUNT]
++ cmp ecx,64
++ jae captured
++ imul edi,ecx,36
++ add edi,RECORDS
++ movups xmm0,xmmword ptr [edx]
++ movups xmmword ptr [edi],xmm0
++ movups xmm0,xmmword ptr [esi]
++ movups xmmword ptr [edi+16],xmm0
++ /* Classify by the exact retail extractor vtable, never a guessed BP range. */
++ /* WaypointAbility is a native targeting range, distinct from generic
++  * overlays. It must survive Lua's separate command-mode preview filter. */
++ mov edx,5
++ cmp dword ptr [esp+36],0x009f200a
++ je classified
++ xor edx,edx
++ cmp dword ptr [esp+36],0x009f1ebd
++ je build_filter
++ mov eax,dword ptr [COLOR]
++ sub eax,0x48
++ jmp identify
++build_filter:
++ mov eax,ebx
++identify:
++ mov edx,0x009f0100
++ push edi
++ call edx
++ pop edi
++ xor edx,edx
++ test eax,eax
++ jz classified
++ mov eax,dword ptr [eax]
++ mov edx,1
++ cmp eax,0x1394f68
++ je classified
++ inc edx
++ cmp eax,0x1394fb8
++ je classified
++ inc edx
++ cmp eax,0x1394fc8
++ je classified
++ inc edx
++ cmp eax,0x1394fa8
++ je classified
++ xor edx,edx
++classified:
++ cvtsi2ss xmm0,edx
++ movss dword ptr [edi+32],xmm0
++ inc dword ptr [COUNT]
++captured:
++ popad
++ popfd
++ ret
++original_append:
++ push ecx
++ mov ecx,dword ptr [edi+4]
++ push ebx
++ push 0x009f3245
++ ret
+diff --git a/payload/resources/native/hud/presentation.cjs b/payload/resources/native/hud/presentation.cjs
+--- a/payload/resources/native/hud/presentation.cjs
++++ b/payload/resources/native/hud/presentation.cjs
+@@ -15,7 +15,7 @@
+ const WINDOW_ENTRY=ENTRY+0x3000;
+ const WINDOW_HASH='9b786e568df1207eb017414832ed08c6fbd57931d2ba7734cb73a58046c9961d';
+ const OVERLAY_ENTRY=ENTRY+0x2000,OVERLAY_APPEND=OVERLAY_ENTRY+0x400;
+-const OVERLAY_HASH='2b1733bf412feb25c6f72486e8822e68cee75398d245fded3fa81b9e0d443cbf';
++const OVERLAY_HASH='21a7b01c63b278e9f0253500370f3af7771ec76b058dc458cd8682f41edea4a2';
+ const RANGE_HASH='2eb53be21d9fa53f055334693e18c812e9094f2e1c2727ecc3cd8a2f59fad5fb';
+ function apply(result,options={}){
+  const readOnly=options.readOnly===true;
+@@ -88,7 +88,7 @@
+  const windowsImage=require('../validate-image.cjs').validateImage(exe);
+  const allowed=[[queueIconAt,queueIconAt+5],[p.nt+6,p.nt+8],[o+4,o+12],[o+56,o+60],[o+64,o+68],[header,header+40],[last.at+8,last.at+12],[last.at+16,last.at+20],[at,at+6],[mini,mini+4],[minimapEdges,minimapEdges+1],[stateAt,stateAt+7],[infoAt,infoAt+7],[appendAt,appendAt+5],[economyAt,economyAt+6],[queueAt,queueAt+7],[repeatAt,repeatAt+5],[inputAt,inputAt+5],...hotkeyCalls.map(at=>[at,at+5])];
+  for(let i=0;i<source.length;i++)if(source[i]!==exe[i]&&!allowed.some(([a,b])=>i>=a&&i<b))throw Error('Unexpected HUD executable change');
+- return {...result,exe,manifest:{...result.manifest,candidateSha256:host.hash(exe),windowsImage,hudPresentation:{liveLayout:{version:'0.32.3',entry:ENTRY+0x3800,drawEntry:ENTRY+0x3810,payloadSha256:LAYOUT_HASH,records:256,scope:'UI-only command/queue rectangles registered from the live Maui frame and reapplied before native draw; native actions and visibility remain unchanged.'},replayEconomy:{entry:ENTRY+0x2800,payloadSha256:REPLAY_ECONOMY_HASH,readOnly:true,scope:'Optional observer/replay army index reads synchronized UI economy without changing focus or simulation. No-argument retail path preserved.'},version:'0.27.20',windowControls:{version:'0.27.30',entry:WINDOW_ENTRY,payloadSha256:WINDOW_HASH,state:0x01d94a00,scope:'Fixed UI-only status/borderless/restore actions for the current process-owned window, original placement preservation, monitor bounds and rollback. Other rollover calls retain the existing native chain.'},overlayReader:{version:'0.27.28',entry:OVERLAY_ENTRY,appendHook:0x9f3240,payloadSha256:OVERLAY_HASH,scope:'Scoped retail placement/normal overlay collection into 64 bounded private UI records. Native extractor and visibility/category predicates; temporary empty vector avoids GPU drawing. Ordinary native vector appends retain their original implementation.'},rangeReader:{version:'0.27.29',entry:RANGE_ENTRY,payloadSha256:RANGE_HASH,scope:'Read-only native UserUnit weapon/intel getters, render-interpolated position and recon-filtered highlighted-unit snapshot. Existing info modes retain their original fallback.'},readOnly,simulationQueueHooks:!readOnly,payloadSha256:PAYLOAD_HASH,entry:ENTRY,drawHook:HOOK,stateBinding:'UIIsConstructionEnabled retains its original first boolean and adds native minimap-expanded plus viewed-army current/cap values and an optional fifth Forge Rating result for an exact commander-name argument. GetRolloverInfo(entityId) uses the existing recon-filtered user-unit snapshot writer and returns synced experience when available.',scope:readOnly?'Legacy replay presentation only; native command-queue insertion and repeat hooks remain original.':'Native draw admission and read-only UI snapshots. Retail HUD initialization, update and shutdown instructions are unchanged; the Lua import order fixes startup. Optional simulation queue accessor rotates newly appended priority orders to the front with the retail active-task cancellation notification before rotation and controller wake for Alt factory and Space structure insertion; native Options, console and Lua keybinding entry points offer the Reforged editor with a scoped acknowledgement and original native fallback; existing native queue objects and flags are preserved using retail intrusive-reference assignment and temporary-reference cleanup. Finite factory identities are held in a separate bounded RW table; no command counts are modified. Only the retail completion call site suppresses their repeat; the shared predicate stays byte-identical. Actual native-world events are exposed synchronously to the Lua input router before retail area gestures. Capture-scoped motion and the retail focus-aware held-button query clear lost releases. Networking unchanged.',minimap:'RF:Mini resizes the displayed native g_map aperture and map_image, preserving their crop, and matches the backing WorldView; retail BE3E20 scene-scale edge overwrites remain disabled. Native camera, render, visibility and input retained.',acceptance:'Actual Windows battle loading, drawing and input still require an in-game test.'}}};
++ return {...result,exe,manifest:{...result.manifest,candidateSha256:host.hash(exe),windowsImage,hudPresentation:{liveLayout:{version:'0.32.3',entry:ENTRY+0x3800,drawEntry:ENTRY+0x3810,payloadSha256:LAYOUT_HASH,records:256,scope:'UI-only command/queue rectangles registered from the live Maui frame and reapplied before native draw; native actions and visibility remain unchanged.'},replayEconomy:{entry:ENTRY+0x2800,payloadSha256:REPLAY_ECONOMY_HASH,readOnly:true,scope:'Optional observer/replay army index reads synchronized UI economy without changing focus or simulation. No-argument retail path preserved.'},version:'0.27.20',windowControls:{version:'0.27.30',entry:WINDOW_ENTRY,payloadSha256:WINDOW_HASH,state:0x01d94a00,scope:'Fixed UI-only status/borderless/restore actions for the current process-owned window, original placement preservation, monitor bounds and rollback. Other rollover calls retain the existing native chain.'},overlayReader:{version:'0.36.12-ability-range1',entry:OVERLAY_ENTRY,appendHook:0x9f3240,payloadSha256:OVERLAY_HASH,scope:'Scoped retail placement/ability/normal overlay collection into 64 bounded private UI records. Native waypoint ability records use kind 5 independently of Lua command mode. Native extractor and visibility/category predicates; temporary empty vector avoids GPU drawing. Ordinary native vector appends retain their original implementation.'},rangeReader:{version:'0.27.29',entry:RANGE_ENTRY,payloadSha256:RANGE_HASH,scope:'Read-only native UserUnit weapon/intel getters, render-interpolated position and recon-filtered highlighted-unit snapshot. Existing info modes retain their original fallback.'},readOnly,simulationQueueHooks:!readOnly,payloadSha256:PAYLOAD_HASH,entry:ENTRY,drawHook:HOOK,stateBinding:'UIIsConstructionEnabled retains its original first boolean and adds native minimap-expanded plus viewed-army current/cap values and an optional fifth Forge Rating result for an exact commander-name argument. GetRolloverInfo(entityId) uses the existing recon-filtered user-unit snapshot writer and returns synced experience when available.',scope:readOnly?'Legacy replay presentation only; native command-queue insertion and repeat hooks remain original.':'Native draw admission and read-only UI snapshots. Retail HUD initialization, update and shutdown instructions are unchanged; the Lua import order fixes startup. Optional simulation queue accessor rotates newly appended priority orders to the front with the retail active-task cancellation notification before rotation and controller wake for Alt factory and Space structure insertion; native Options, console and Lua keybinding entry points offer the Reforged editor with a scoped acknowledgement and original native fallback; existing native queue objects and flags are preserved using retail intrusive-reference assignment and temporary-reference cleanup. Finite factory identities are held in a separate bounded RW table; no command counts are modified. Only the retail completion call site suppresses their repeat; the shared predicate stays byte-identical. Actual native-world events are exposed synchronously to the Lua input router before retail area gestures. Capture-scoped motion and the retail focus-aware held-button query clear lost releases. Networking unchanged.',minimap:'RF:Mini resizes the displayed native g_map aperture and map_image, preserving their crop, and matches the backing WorldView; retail BE3E20 scene-scale edge overwrites remain disabled. Native camera, render, visibility and input retained.',acceptance:'Actual Windows battle loading, drawing and input still require an in-game test.'}}};
+ }
+ const PAYLOAD_HASH='e42adbcd737638e6a6bb4a893e9578fdb6d713ee8a77d1d1b2c21605c221a4c8';
+ module.exports={LAYOUT_HASH,REPLAY_ECONOMY_HASH,apply,ENTRY,HOOK,PAYLOAD_HASH,RANGE_ENTRY,RANGE_HASH,OVERLAY_ENTRY,OVERLAY_APPEND,OVERLAY_HASH,WINDOW_ENTRY,WINDOW_HASH};
+diff --git a/payload/resources/native/hud/range-assets.cjs b/payload/resources/native/hud/range-assets.cjs
+--- a/payload/resources/native/hud/range-assets.cjs
++++ b/payload/resources/native/hud/range-assets.cjs
+@@ -20,11 +20,23 @@
+  }
+  return result;
+ }
++function abilityTextures(){
++ return [90,45,22,8,1].map(alpha=>{
++  const name='rf_ability_area_'+alpha+'.dds';
++  const data=fs.readFileSync(path.join(__dirname,'ability-range-art',name));
++  assert.equal(data.length,65664,name+' must contain exactly one 256px BC3 surface');
++  assert.equal(data.toString('ascii',0,4),'DDS ');
++  assert.equal(data.toString('ascii',84,88),'DXT5');
++  assert.equal(data.readUInt32LE(12),256);assert.equal(data.readUInt32LE(16),256);
++  assert.equal(data.readUInt32LE(28),0); // Working marker profile: no mip chain.
++  return {name:'textures/ui/common/pc/ingame/hud/'+name,data};
++ });
++}
+ function textures(){
+  const manifest=JSON.parse(fs.readFileSync(path.join(__dirname,'terrain-rings.json'),'utf8')),bytes=fs.readFileSync(path.join(__dirname,'terrain-rings.zip'));
+  assert.equal(manifest.format,'s2r-terrain-rings-v1');assert.equal(hash(bytes),manifest.bundleSha256);
+  const entries=require('../lobby/supcom2-ui.cjs').readZip(bytes,64);assert.equal(entries.length,24);assert.equal(manifest.textures.length,24);
+  for(const e of entries){const m=manifest.textures.find(t=>t.name===e.name);assert.ok(m);assert.equal(e.data.length,m.size);assert.equal(hash(e.data),m.sha256);}
+- return [...legacyTextures(),...entries];
++ return [...legacyTextures(),...entries,...abilityTextures()];
+ }
+ module.exports={textures,terrainTextures,dds};
+diff --git a/payload/resources/native/hud/reforged_build.lua b/payload/resources/native/hud/reforged_build.lua
+--- a/payload/resources/native/hud/reforged_build.lua
++++ b/payload/resources/native/hud/reforged_build.lua
+@@ -6,6 +6,7 @@
+ local Button = import('/lua/maui/button.lua').Button
+ local Layout = import('/lua/ui/game/reforged_layout.lua')
+ local Keys = import('/lua/ui/game/reforged_keys.lua')
++local Cost = import('/lua/ui/game/reforged_buildcost.lua')
+ local scale = Layout and Layout.scale or 1
+ local buildLayout=Layout.build
+ local cellCount=12 -- Modern presenter; Classic owns an eight-slot tier strip.
+@@ -318,7 +319,7 @@
+ end
+ function Create(parent)
+     if Layout.IsClassic()then
+-        return import('/lua/ui/game/reforged_classicbuild.lua').Create(parent,{ReadOptions=ReadOptions,Activate=Activate,BuildIcon=BuildIcon})
++        return import('/lua/ui/game/reforged_classicbuild.lua').Create(parent,{ReadOptions=ReadOptions,Activate=Activate,BuildIcon=BuildIcon,Cost=Cost and Cost.Labels})
+     end
+     local state={reserved={},root=Group(parent,'Reforged construction'),category=false,page=1,tick=0,dirty=true,visible=false,cells={},tabs={}}
+     Keys.Attach(state,Activate)
+@@ -354,7 +355,8 @@
+         place(self.tooltip,x,y,320,132) place(self.tipTitle,x+12,y+12,296,28) place(self.tipCost,x+12,y+50,296,24) place(self.tipStats,x+12,y+80,296,28)
+         local econ=item.bp.Economy or {} local defense=item.bp.Defense or {}
+         self.tipTitle:SetText(item.name)
+-        self.tipCost:SetText(string.format('Base cost:  %s Mass   %s Energy',tostring(econ.MassValue or econ.BuildCostMass or '?'),tostring(econ.EnergyValue or econ.BuildCostEnergy or '?')))
++        local mass,energy=Cost.Labels(item)
++        self.tipCost:SetText(string.format('Cost:  %s Mass   %s Energy',mass,energy))
+         self.tipStats:SetText(string.format('Health: %s   Build time: %s',tostring(defense.MaxHealth or '?'),tostring(econ.BuildTime or '?')))
+         self.tooltip:Show() self.tipTitle:Show() self.tipCost:Show() self.tipStats:Show()
+     end
+diff --git a/payload/resources/native/hud/reforged_buildcost.lua b/payload/resources/native/hud/reforged_buildcost.lua
+new file mode 100644
+--- /dev/null
++++ b/payload/resources/native/hud/reforged_buildcost.lua
+@@ -0,0 +1,86 @@
++-- Read-only prices from the effective native research definitions and the
++-- focused army's existing research sample. The engine still charges the order.
++local Data=import('/lua/ui/game/reforged_construction_costs.lua')
++local Observer=import('/lua/ui/game/reforged_observer.lua')
++local parsed={}
++local function category(expression)
++    if parsed[expression]==nil then
++        local ok,filter=pcall(ParseEntityCategory,expression)
++        parsed[expression]=ok and filter or false
++    end
++    return parsed[expression]
++end
++local function matches(expression,id)
++    local filter=category(expression)
++    return filter and EntityCategoryContains(filter,id)
++end
++local function multiplier(base,buffs,key)
++    local add,mult,floor,ceil=0,1
++    for _,buff in pairs(buffs)do
++        local effect=buff[key]
++        if effect then
++            local count=buff.count
++            add=add+(effect.Add or 0)*count
++            mult=mult+(effect.Mult or 0)*count
++            if effect.Floor then floor=math.min(floor or effect.Floor,effect.Floor)end
++            if effect.Ceil then ceil=math.max(ceil or effect.Ceil,effect.Ceil)end
++        end
++    end
++    local value=(base+add)*math.max(0,mult)
++    if floor then value=math.max(floor,value)end
++    if ceil then value=math.min(ceil,value)end
++    return math.max(0,value)
++end
++local function factors(bp,target,completed)
++    local economy=bp.Economy or {}
++    local exclusion=economy.BuildModifiersExclusionCategory or bp.BuildModifiersExclusionCategory
++    if type(exclusion)=='table'then
++        for _,expression in pairs(exclusion)do
++            if type(expression)=='string'and matches(expression,target)then return 1,1 end
++        end
++    end
++    local active={}
++    for id in pairs(completed)do
++        for _,buff in ipairs(Data.ConstructionCosts[id]or{})do
++            if matches(buff.category,bp.BlueprintId)then
++                local previous=active[buff.id]
++                active[buff.id]={mass=buff.mass,energy=buff.energy,count=buff.stacks=='ALWAYS' and previous and previous.count+1 or 1}
++            end
++        end
++    end
++    return multiplier(economy.BuildMassCostMultiplier or 1,active,'mass'),
++        multiplier(economy.BuildEnergyCostMultiplier or 1,active,'energy')
++end
++local function label(base,low,high)
++    if type(base)~='number'then return '?'end
++    local function display(value)return (string.gsub(string.format('%.2f',value),'%.?0+$',''))end
++    local first,last=display(base*(low or 1)),display(base*(high or 1))
++    return first==last and first or first..'–'..last
++end
++function Labels(item)
++    local economy=item.bp.Economy or {}
++    local mass,energy=economy.MassValue or economy.BuildCostMass,economy.EnergyValue or economy.BuildCostEnergy
++    if not Data.ConstructionCosts then return label(mass),label(energy)end
++    local focus=GetFocusArmy()
++    local sample=Observer.Samples()[focus]
++    local completed=sample and sample.research or {}
++    local builders=GetSelectedUnits()or{}
++    local mMin,mMax,eMin,eMax
++    local seen={}
++    for _,unit in pairs(builders)do
++        if unit:GetArmy()==focus then
++            local bp=unit:GetBlueprint()
++            local id=bp.BlueprintId
++            if id and not seen[id]then
++                local _,_,buildable=GetUnitCommandData({unit})
++                if buildable and EntityCategoryContains(buildable,item.id)then
++                    seen[id]=true
++                    local m,e=factors(bp,item.id,completed)
++                    mMin,mMax=math.min(mMin or m,m),math.max(mMax or m,m)
++                    eMin,eMax=math.min(eMin or e,e),math.max(eMax or e,e)
++                end
++            end
++        end
++    end
++    return label(mass,mMin,mMax),label(energy,eMin,eMax)
++end
+diff --git a/payload/resources/native/hud/reforged_classicbuild.lua b/payload/resources/native/hud/reforged_classicbuild.lua
+--- a/payload/resources/native/hud/reforged_classicbuild.lua
++++ b/payload/resources/native/hud/reforged_classicbuild.lua
+@@ -36,15 +36,16 @@
+     state.tooltip:SetName('Classic build tooltip');state.tipCost:SetName('Classic build mass cost');state.tipEnergy:SetName('Classic build energy cost');state.tipTime:SetName('Classic build time')
+     state.tipCost:SetColor('ff45c35e');state.tipEnergy:SetColor('ffefda2d')
+     function state:Tip(item)
+-        self.hovered=item
++        if not item then self.hoveredCell=nil end
+         if not item then self.tooltip:Hide();self.tipTitle:Hide();self.tipCost:Hide();self.tipEnergy:Hide();self.tipTime:Hide();return end
+         local s=Layout.GetScale();local w,h=GetFrame(0).Width()/s,GetFrame(0).Height()/s
+         local x,y,pw,ph=Layout.BuildTooltipRect(w,h,336,112)
+         place(self.tooltip,x,y,pw,ph);place(self.tipTitle,x+12,y+8,pw-24,24)
+         place(self.tipCost,x+12,y+38,pw-24,20);place(self.tipEnergy,x+12,y+61,pw-24,20);place(self.tipTime,x+12,y+84,pw-24,20)
+         local e=item.bp.Economy or {};self.tipTitle:SetText(item.name)
+-        self.tipCost:SetText('Mass: '..tostring(e.MassValue or e.BuildCostMass or '?'))
+-        self.tipEnergy:SetText('Energy: '..tostring(e.EnergyValue or e.BuildCostEnergy or '?'));self.tipTime:SetText('Build time: '..tostring(e.BuildTime or '?'))
++        local mass,energy=api.Cost(item)
++        self.tipCost:SetText('Mass: '..mass)
++        self.tipEnergy:SetText('Energy: '..energy);self.tipTime:SetText('Build time: '..tostring(e.BuildTime or '?'))
+         self.tooltip:Show();self.tipTitle:Show();self.tipCost:Show();self.tipEnergy:Show();self.tipTime:Show()
+     end
+     function state:SetTier(tier)
+@@ -63,7 +64,10 @@
+     for i=1,8 do
+         local b=button();b.icon=image('r23u.dds',3);b.key=text('',10,5)
+         b.OnClick=function(self,mods)state:Tip(false);if self.item then api.Activate(self.item.id,mods)end end
+-        b.OnRolloverEvent=function(self,event)if event=='enter'then state:Tip(self.item)else state:Tip(false)end end
++        b.OnRolloverEvent=function(self,event)
++            state.hoveredCell=event=='enter' and self or nil
++            state:Tip(state.hoveredCell and self.item)
++        end
+         state.cells[i]=b
+     end
+     function state:SetPalette(p)self.palette=p;self.edge:SetTexture(art..'r23_'..p.name..'.dds');self.dirty=true end
+@@ -74,6 +78,7 @@
+         if not force and not self.dirty and self.tick%3~=0 then return end
+         local items,factory,identity=api.ReadOptions()
+         if #items==0 or GetCurrentUIState()~='game'then self.root:Hide();self.visible=false;self.identity=false;self.buildKeys=false;self:Tip(false);return end
++        if not self.visible then self.root:Show();self.visible=true end
+         if identity~=self.identity or factory~=self.factory then self.tier=1;self.page=1;self.buildKeys=false;self:Tip(false)end
+         self.identity=identity;self.factory=factory;self.items=items;self.builders=Model.Builders()
+         local shown=Model.Options(items,self.tier,self.builders,self.factory)
+@@ -91,7 +96,7 @@
+                 if b.mNormal~=normal then b.mNormal=normal;b:ApplyTextures();place(b,tx,y+1,120,23)end
+                 b:Show();b.caption:Show()
+             else
+-                b:Hide();b.caption:Hide()
++                b.caption:SetText('');b:Hide();b.caption:Hide()
+             end
+         end
+         place(self.keyMode,x+l.width-94,y+1,26,23);place(self.keyMode.caption,x+l.width-86,y+5,20,17)
+@@ -103,14 +108,16 @@
+         for i,b in ipairs(self.cells)do
+             local item=shown[(self.page-1)*8+i];local bx=x+5+(i-1)*(size+gap);local by=y+27
+             place(b,bx,by,size,size);place(b.icon,bx,by,size,size);place(b.key,bx+3,by+1,24,14)
+-            if self.hovered and (not item or not b.item or self.hovered.id==b.item.id and item.id~=b.item.id)then self:Tip(false)end
++            if self.hoveredCell==b then
++                self:Tip(item and b.item and item.id==b.item.id and item)
++            end
+             if item then
+                 if not b.item or b.item.id~=item.id then b.icon:SetTexture(api.BuildIcon(item.id));place(b.icon,bx,by,size,size)end
+                 b.item=item;b.key:SetText(self.buildKeys and(self.assigned[string.lower(item.id)] or '')or'')
+                 b:Show();b.icon:Show();b.key:Show()
+-            else b.item=nil;b:Hide();b.icon:Hide();b.key:Hide()end
++            else b.item=nil;b.key:SetText('');b:Hide();b.icon:Hide();b.key:Hide()end
+         end
+-        self.hint:Hide();self.root:Show();self.visible=true;self.dirty=false
++        self.hint:Hide();self.dirty=false
+     end
+     function state:ParentShown()self.visible=false;self.dirty=true;self:Tip(false)end
+     function state:SelectionChanged()self.dirty=true;self:Update(true)end
+diff --git a/payload/resources/native/hud/reforged_controls.lua b/payload/resources/native/hud/reforged_controls.lua
+--- a/payload/resources/native/hud/reforged_controls.lua
++++ b/payload/resources/native/hud/reforged_controls.lua
+@@ -390,7 +390,8 @@
+ local function ringTexture(kind)
+     local checked=ringTextures[kind]
+     if checked~=nil then return checked end
+-    local texture='/textures/ui/common/pc/ingame/hud/r23_segment_'..kind..'.dds'
++    -- Reuse the shipped DXT5 violet primitive for mobility targeting.
++    local texture='/textures/ui/common/pc/ingame/hud/r23_segment_'..(kind=='ability'and'omni'or kind)..'.dds'
+     -- The default one-pixel Maui border reports a 64px DDS as 62px.
+     if type(GetTextureDimensions)=='function'and call(GetTextureDimensions,texture,0)~=64 then
+         ringTextures[kind]=false
+@@ -463,6 +464,9 @@
+ local function rangeMesh(view,rings,previous)
+     local tau=2*math.pi
+     local plans,minimumTotal,demand={},0,0
++    local abilityCount=0
++    for _,ring in ipairs(rings)do if ring.kind=='ability'then abilityCount=abilityCount+1 end end
++    local abilityMinimum=math.min(24,math.floor(maxRingSegments/math.max(1,abilityCount)))
+     for index,ring in ipairs(rings)do
+         if not ring.arcs or #ring.arcs>0 then
+             local texture=ringTexture(ring.kind)
+@@ -471,7 +475,9 @@
+             local arcs=ring.arcs or {{0,tau}}
+             for arcIndex,arc in ipairs(arcs)do
+                 local fraction=(arc[2]-arc[1])/tau
+-                local minimum=math.max(1,math.ceil(4*fraction))
++                -- Reserve a readable boundary for the active ability even in a
++                -- dense selection; ordinary coverage shares the remaining budget.
++                local minimum=math.max(1,math.ceil((ring.kind=='ability'and abilityMinimum or 4)*fraction))
+                 local extra=math.max(0,math.ceil(segments*fraction)-minimum)
+                 minimumTotal=minimumTotal+minimum;demand=demand+extra
+                 local key=(ring.key or (ring.kind..':'..index))..':'..#arcs..':'..arcIndex
+@@ -481,6 +487,7 @@
+     end
+     if minimumTotal>maxRingSegments then
+         table.sort(plans,function(a,b)
++            if (a.ring.kind=='ability')~=(b.ring.kind=='ability')then return a.ring.kind=='ability' end
+             return a.ring.radius*(a.arc[2]-a.arc[1])>b.ring.radius*(b.arc[2]-b.arc[1])
+         end)
+         while minimumTotal>maxRingSegments do
+@@ -541,7 +548,7 @@
+     local span=math.max(w,h)
+     for _,path in ipairs(mesh.paths)do
+         local px,py
+-        local thickness=path.kind=='weapon'and 1.6 or 1.25
++        local thickness=path.kind=='ability'and 2 or path.kind=='weapon'and 1.6 or 1.25
+         local texture=path.texture
+         for step=1,path.count+1 do
+             local p=path.points[step]
+@@ -794,6 +801,7 @@
+                 frame.time,frame.number=now,rangeFrameNumber
+                 local hover=#units==0 and rangeHoverAllowed and call(GetRolloverInfo)
+                 local rings,coverage=fieldVisuals:Rings(units,hover,rangeHoverAllowed,preview,pov)
++                if fieldVisuals.DrawAbilityFill then fieldVisuals:DrawAbilityFill(rings)end
+                 if #rings==0 then
+                     if frame.mesh then hideRings(true);frame.mesh=nil;frame.geometry=nil end
+                     if not coverage.overlayReady then restoreRanges();return end
+diff --git a/payload/resources/native/hud/reforged_hud.lua b/payload/resources/native/hud/reforged_hud.lua
+--- a/payload/resources/native/hud/reforged_hud.lua
++++ b/payload/resources/native/hud/reforged_hud.lua
+@@ -16,7 +16,7 @@
+ local Perf=import('/lua/ui/game/reforged_performance.lua')
+ local converterOK,Converters=pcall(import,'/lua/ui/game/reforged_converterui.lua')
+ local active = false
+-local version = '0.37.6'
++local version = '0.37.7'
+ local researchColor = 'ffd99412'
+ local rootPath = '/textures/ui/common/pc/ingame/hud/'
+ local palettes = {
+diff --git a/payload/resources/native/hud/reforged_ranges.lua b/payload/resources/native/hud/reforged_ranges.lua
+--- a/payload/resources/native/hud/reforged_ranges.lua
++++ b/payload/resources/native/hud/reforged_ranges.lua
+@@ -30,7 +30,7 @@
+     local ok,ready,count,master=pcall(GetRolloverInfo,'RF:Overlays')
+     if not ok or ready~=true or type(master)~='boolean'or not G.Finite(count)or count<0 or count>64 or count~=math.floor(count)then return end
+     local result={}
+-    local kinds={[0]='overlay',[1]='weapon',[2]='radar',[3]='sonar',[4]='omni'}
++    local kinds={[0]='overlay',[1]='weapon',[2]='radar',[3]='sonar',[4]='omni',[5]='ability'}
+     for i=1,count do
+         local success,valid,x,z,minimum,radius,r,g,b,a,kind=pcall(GetRolloverInfo,'RF:Overlay',tostring(i))
+         if not success or valid~=true then return end
+@@ -46,7 +46,8 @@
+     return result,master
+ end
+ function Create()
+-    local fields,ranges,motion,terrainRings={},{},{},{}
++    local fields,ranges,motion,terrainRings,abilityFills={},{},{},{},{}
++    local fillTextures={}
+     local motionArmy=nil
+     local coverageKey,coverageArcs,coverageSeeds=nil,nil,nil
+     local reportCount,lastReport=0,nil
+@@ -67,6 +68,12 @@
+     end
+     local function retire(pool)for key,d in pairs(pool)do d:Destroy();pool[key]=nil end end
+     local function hide(pool)for _,d in pairs(pool)do d:SetScale(vector(0,0,0))end end
++    local function hideAbilityFills(first)
++        for i=first or 1,#abilityFills do
++            local d=abilityFills[i]
++            if d._rfFillVisible then d:SetScale(vector(0,0,0));d._rfFillVisible=false end
++        end
++    end
+     local function place(pool,key,texture,p,x,z)
+         local d=pool[key]
+         if not d then d=Decal{};d:SetTexture(root..texture);pool[key]=d end
+@@ -74,14 +81,50 @@
+     end
+     return{
+         Clear=function()hide(fields);hide(ranges)end,
+-        ClearRings=function()hide(terrainRings)end,
++        ClearRings=function()hide(terrainRings);hideAbilityFills()end,
+         Reset=function()motion={};motionArmy=nil;coverageSeeds=nil;coverageKey=nil end,
+-        Destroy=function()retire(fields);retire(ranges);retire(terrainRings);motion={}end,
++        Destroy=function()retire(fields);retire(ranges);retire(terrainRings);retire(abilityFills);motion={}end,
++        -- Low-opacity ground decals show the complete ability area. The native
++        -- record owns both origin and radius; mouse motion never recentres it.
++        -- Inner exclusion zones stay outline-only rather than filling illegal
++        -- terrain. Jump/Teleport discs normally have a native minimum of zero.
++        DrawAbilityFill=function(self,list)
++            local discs={}
++            for _,r in ipairs(list)do
++                if r.kind=='ability'and r.minimum==0 and G.Position(r.center)
++                    and G.Finite(r.radius)and r.radius>0 and r.radius<=100000 and #discs<64 then
++                    discs[#discs+1]=r
++                end
++            end
++            local count=#discs
++            if count==0 then hideAbilityFills();return 0 end
++            -- Keep a dense selection translucent despite overlapping decals.
++            local alpha=count<=1 and 90 or count<=2 and 45 or count<=4 and 22 or count<=10 and 8 or 1
++            local texture=root..'rf_ability_area_'..alpha..'.dds'
++            if fillTextures[texture]==nil then
++                fillTextures[texture]=type(GetTextureDimensions)=='function'and safe(GetTextureDimensions,texture,0)==256
++            end
++            if not fillTextures[texture]then hideAbilityFills();return 0 end
++            for i,r in ipairs(discs)do
++                local d=abilityFills[i]
++                if not d then d=Decal{};abilityFills[i]=d end
++                if d._rfTexture~=texture then d:SetTexture(texture);d._rfTexture=texture end
++                if not d._rfFillVisible or d._rfRadius~=r.radius or d._rfX~=r.center[1]or d._rfZ~=r.center[3]then
++                    -- 256px DDS, radius 120px. Scale before SetPosition.
++                    local diameter=r.radius*2*256/240
++                    d:SetScale(vector(diameter,1,diameter));d:SetPosition(vector(r.center[1],r.center[2],r.center[3]))
++                    d._rfRadius,d._rfX,d._rfZ=r.radius,r.center[1],r.center[3]
++                    d._rfFillVisible=true
++                end
++            end
++            hideAbilityFills(count+1)
++            return count
++        end,
+         -- The retail UserDecal pass projects onto terrain. Maui screen-space
+         -- segments cannot depth-test against the ground and are not used here.
+         DrawRings=function(self,list,project)
+             local count=0
+-            local allowed={weapon=true,build=true,radar=true,sonar=true,omni=true,overlay=true}
++            local allowed={weapon=true,build=true,radar=true,sonar=true,omni=true,overlay=true,ability=true}
+             for _,r in ipairs(list)do
+                 if count>=42 then break end
+                 if allowed[r.kind]and G.Position(r.center)and G.Finite(r.radius)and r.radius>0 and r.radius<=100000 then
+@@ -100,7 +143,7 @@
+                     end
+                     count=count+1
+                     local d=terrainRings[count];if not d then d=Decal{};terrainRings[count]=d end
+-                    local texture='r31_range_'..r.kind..'_'..width..'.dds'
++                    local texture='r31_range_'..(r.kind=='ability'and'omni'or r.kind)..'_'..width..'.dds'
+                     if d._rfTexture~=texture then d:SetTexture(root..texture);d._rfTexture=texture end
+                     -- SetPosition subtracts half the CURRENT scale in retail.
+                     -- Scale first, then centre, including on reused decals.
+@@ -256,11 +299,18 @@
+                     coverage.masterEnabled=master
+                     for index,r in ipairs(overlays)do
+                         local intel=r.kind=='radar'or r.kind=='sonar'
+-                        if intel or preview and r.kind~='omni'then
++                        -- Native Jump/Teleport targeting can bypass Lua commandmode.
++                        -- The engine emits this type only while that preview is active;
++                        -- keep its live centre/radius rather than guessing from a BP.
++                        if r.kind=='ability' or intel or preview and r.kind~='omni'then
+                             r.key='native:'..r.kind..':'..index
+                             r.selected=intel
+                             if intel then nativeIntel[r.kind]=true end
+                             append(r)
++                            if r.kind=='ability'and r.minimum>0 and r.minimum<r.radius then
++                                append({kind='ability',radius=r.minimum,color=r.color,center=r.center,
++                                    key=r.key..':minimum'})
++                            end
+                         end
+                     end
+                 end
+diff --git a/payload/resources/native/hud/reforged_stats.lua b/payload/resources/native/hud/reforged_stats.lua
+--- a/payload/resources/native/hud/reforged_stats.lua
++++ b/payload/resources/native/hud/reforged_stats.lua
+@@ -513,10 +513,10 @@
+                     if row.icon.SetAlpha then row.icon:SetAlpha(1) end
+                 else row.icon:Hide() end
+                 local nameX=35
+-                if number(badgeCode) and badgeCode>=1 and badgeCode<=199 then
++                if number(badgeCode) and badgeCode>=1 and badgeCode<=215 then
+                     local ids={badgeCode%16,math.floor(badgeCode/16)}
+                     for i,id in ipairs(ids) do
+-                        if id>=1 and id<=12 and id==math.floor(id) then
++                        if id>=1 and id<=13 and id==math.floor(id) then
+                             local icon=row['badge'..i]
+                             if icon.badgeId~=id then
+                                 icon:SetTexture('/textures/ui/common/pc/frontend/rfbadge_'..id..'.dds')
+diff --git a/payload/resources/native/hud/replay-presentation.cjs b/payload/resources/native/hud/replay-presentation.cjs
+--- a/payload/resources/native/hud/replay-presentation.cjs
++++ b/payload/resources/native/hud/replay-presentation.cjs
+@@ -4,9 +4,9 @@
+ const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+ const norm=e=>e.name.replaceAll('\\','/').toLowerCase();
+-function isUI(name){return name.startsWith('ui/')||/^(?:mods\/dlc1\/shadow\/)?textures\/ui\//.test(name)||/^lua\/rf0350_strategic_layout_[01]\.lua$/.test(name)||name.startsWith('lua/ui/')||name==='lua/usersync.lua'||/^lua\/rf_orders_(graph|waypoint|mode|buttons|usersync)_original\.lua$/.test(name)||/^lua\/rf\d+_(?:usersync|pc)_original\.lua$/.test(name);}
++function isUI(name){return name.startsWith('ui/')||/^(?:mods\/dlc1\/shadow\/)?textures\/ui\//.test(name)||/^lua\/rf0350_strategic_layout_[01]\.lua$/.test(name)||name.startsWith('lua/ui/')||name==='mods/dlc1/shadow/lua/ui/game/reforged_construction_costs.lua'||name==='lua/usersync.lua'||/^lua\/rf_orders_(graph|waypoint|mode|buttons|usersync)_original\.lua$/.test(name)||/^lua\/rf\d+_(?:usersync|pc)_original\.lua$/.test(name);}
+ function compose(current,selected,originalEntries,{legacy=false,revision='current'}={}){
+- const viewerData=e=>norm(e).endsWith('/reforged_research_data.lua');
++ const viewerData=e=>/\/reforged_(?:research_data|construction_costs)\.lua$/.test(norm(e));
+  const selectedScripts=legacy?[]:selected.scripts.filter(e=>!isUI(norm(e))&&!viewerData(e)).map(e=>{
+   // Recorded 0.35.x rules use their original AI, units and balance.
+   // Only the blueprint loader environment changes when those rules are replayed.
+@@ -37,6 +37,6 @@
+  assert.equal(new Set(scripts.map(norm)).size,scripts.length,'Duplicate replay script path');
+  // Every selected non-instrumented simulation/resource entry remains exact.
+  for(const source of selectedScripts){if(audit.some(a=>a.path===norm(source)))continue;const same=scripts.find(e=>norm(e)===norm(source));assert.ok(same&&same.data.equals(source.data),'Selected replay content changed: '+source.name);}
+- return {...current,scripts,overrides,manifest:{...current.manifest,mode:'replay-presentation-0376',simulationRevision:revision,originalSimulation:legacy,stockOrders,...(stockOrders?{stockControlRevision:selected.manifest.stockControlRevision,originalBalance:true}:{}),...(selected.manifest.gameplay?{gameplay:selected.manifest.gameplay}:{}),gameplayOverrides:false,telemetryOnly:true,delegatedClasses:audit,scope:'Current replay controls/minimap with selected simulation rules preserved; replay-only statistics wrappers write private counters and UI Sync, never orders, economy, blueprints, RNG or AI behavior.'}};
++ return {...current,scripts,overrides,manifest:{...current.manifest,mode:'replay-presentation-0377',simulationRevision:revision,originalSimulation:legacy,stockOrders,...(stockOrders?{stockControlRevision:selected.manifest.stockControlRevision,originalBalance:true}:{}),...(selected.manifest.gameplay?{gameplay:selected.manifest.gameplay}:{}),gameplayOverrides:false,telemetryOnly:true,delegatedClasses:audit,scope:'Current replay controls/minimap with selected simulation rules preserved; replay-only statistics wrappers write private counters and UI Sync, never orders, economy, blueprints, RNG or AI behavior.'}};
+ }
+ module.exports={compose,isUI};
+diff --git a/payload/resources/native/hud/research.cjs b/payload/resources/native/hud/research.cjs
+--- a/payload/resources/native/hud/research.cjs
++++ b/payload/resources/native/hud/research.cjs
+@@ -65,18 +65,34 @@
+  }
+  throw Error('Unknown research tree data kind: '+kind);
+ }
++function buffData(parsed,p){
++ const buffs=parsed.calls;assert.ok(buffs.length>0);
++ if(!p)return buffs;
++ const seen=new Set();
++ for(const d of buffs){seen.add(d.Name);const patch=p.buffs[d.Name];if(patch){d.Affects=clone(patch.effects);if(patch.weaponCategory)d.WeaponCategory=patch.weaponCategory;else delete d.WeaponCategory;}}
++ for(const [id,patch]of Object.entries(p.buffs))if(!seen.has(id))buffs.push({Name:id,DisplayName:id,BuffType:'SC2',Stacks:'ALWAYS',Duration:-1,...(patch.weaponCategory?{WeaponCategory:patch.weaponCategory}:{}),Affects:clone(patch.effects)});
++ return buffs;
++}
++function constructionCosts(definitions,buffs){
++ const effects=new Map(buffs.filter(b=>b.Affects?.BuildCostMass||b.Affects?.BuildCostEnergy).map(b=>[b.Name,b]));
++ const result={};
++ for(const [id,d] of Object.entries(definitions)){
++  for(const mod of [{CATS:d.CATS,Buffs:d.Buffs},...(Array.isArray(d.Modifiers)?d.Modifiers:[])]){
++   for(const buffId of Array.isArray(mod.Buffs)?mod.Buffs:[]){
++    const buff=effects.get(buffId);
++    if(buff)(result[id]??=[]).push({category:mod.CATS||'ALLUNITS',id:buffId,stacks:buff.Stacks,mass:buff.Affects.BuildCostMass,energy:buff.Affects.BuildCostEnergy});
++   }
++  }
++ }
++ return result;
++}
+ function moduleSource(kind,original,p){
+  const parsed=readData(original),head='-- Reforged research publication: native data only.\n';
+  if(kind==='definitions'||kind==='layout'){
+   const name=kind==='definitions'?'ResearchDefinitions':'research_layout';
+   return head+name+'='+literal(treeData(kind,parsed,p))+'\n';
+  }
+- if(kind==='buffs'){
+-  const seen=new Set(),buffs=parsed.calls;assert.ok(buffs.length>0);
+-  for(const d of buffs){seen.add(d.Name);const patch=p.buffs[d.Name];if(patch){d.Affects=clone(patch.effects);if(patch.weaponCategory)d.WeaponCategory=patch.weaponCategory;else delete d.WeaponCategory;}}
+-  for(const [id,patch]of Object.entries(p.buffs))if(!seen.has(id))buffs.push({Name:id,DisplayName:id,BuffType:'SC2',Stacks:'ALWAYS',Duration:-1,...(patch.weaponCategory?{WeaponCategory:patch.weaponCategory}:{}),Affects:clone(patch.effects)});
+-  return head+buffs.map(d=>'BuffBlueprint '+literal(d)).join('\n')+'\n';
+- }
++ if(kind==='buffs')return head+buffData(parsed,p).map(d=>'BuffBlueprint '+literal(d)).join('\n')+'\n';
+  assert.equal(kind,'restrictions');
+  const restrictions=parsed.variables.DefaultBuildRestrictions;
+  assert.ok(Array.isArray(restrictions));
+@@ -121,7 +137,7 @@
+ function viewerAssets(originals, rules) {
+  const lookup=new Map(originals.map(e=>[e.name.replaceAll('\\','/').toLowerCase(),e]));
+  const patch=rules?patches(rules):undefined;
+- return ['lua/','mods/dlc1/shadow/lua/'].map(prefix=>{
++ return ['lua/','mods/dlc1/shadow/lua/'].flatMap(prefix=>{
+   const data=(kind,name)=>{
+    const e=lookup.get(prefix+name);assert.ok(e,'Missing research viewer data '+prefix+name);
+    return treeData(kind,readData(e.data),patch);
+@@ -142,7 +158,13 @@
+    }
+    if(nodes.length)trees[tree]=nodes.sort((a,b)=>a.row-b.row||a.col-b.col||a.id.localeCompare(b.id));
+   }
+-  return {name:prefix+'ui/game/reforged_research_data.lua',data:Buffer.from('Trees='+literal(trees)+'\n')};
++  const buffEntry=lookup.get(prefix+'sim/buffs/researchbuffdefinitions.lua');
++  assert.ok(buffEntry,'Missing construction cost data '+prefix);
++  const costs=constructionCosts(defs,buffData(readData(buffEntry.data),patch));
++  return [
++   {name:prefix+'ui/game/reforged_research_data.lua',data:Buffer.from('Trees='+literal(trees)+'\n')},
++   {name:prefix+'ui/game/reforged_construction_costs.lua',data:Buffer.from('ConstructionCosts='+literal(costs)+'\n')}
++  ];
+  });
+ }
+ module.exports={assets,patches,literal,moduleSource,iconDds,brainHook,viewerAssets};
+diff --git a/payload/resources/native/lobby/indexed-probe.cjs b/payload/resources/native/lobby/indexed-probe.cjs
+--- a/payload/resources/native/lobby/indexed-probe.cjs
++++ b/payload/resources/native/lobby/indexed-probe.cjs
+@@ -144,7 +144,7 @@
+   const extra=options.textures??[];check(Array.isArray(extra)&&extra.length<=100,'Invalid custom texture list');
+   for(const e of extra)check(typeof e.name==='string'&&/^textures\/ui\/common\/pc\/frontend\/[a-z0-9_]+\.dds$/.test(e.name)&&Buffer.isBuffer(e.data)&&e.data.subarray(0,4).toString()==='DDS ','Invalid custom lobby texture');
+   probeEntries.push(...extra);
+-  if(options.playerBadges===true||options.replayPresentation&&!options.legacyReplay)probeEntries.push(...require("./player-badges/assets.cjs").textures());
++  if(options.playerBadges===true||options.replayPresentation&&!options.legacyReplay)probeEntries.push(...require("./player-badges/assets.cjs").textures(13));
+   let hudAssets=null;
+   if(options.research&&options.legacyReplay)throw Error('Original replay playback cannot use published research.');
+   if(options.hud){hudAssets=require('../hud/assets.cjs').assets(options.hud,options.hudScale??1,options.research,options.gameplay);if(options.replayPresentation){const revision=options.replaySimulationRevision||'current';let selected=hudAssets;if(!options.legacyReplay&&revision!=='current'){assert.ok(/^[0-9]{4,5}$/.test(revision));const frozen=path.join(__dirname,'../hud/frozen-v'+revision+'.cjs');const provider=fs.existsSync(frozen)?require(frozen):require('../hud/legacy-v'+revision+'/assets.cjs');selected=provider.assets(options.hud,options.hudScale??1,options.research,options.gameplay);}hudAssets=require('../hud/replay-presentation.cjs').compose(hudAssets,selected,require('./supcom2-ui.cjs').readZip(options.hud,2000),{legacy:options.legacyReplay===true||options.gameplay?.profileId==='vanilla-1.260-iwbp'&&selected.manifest.stockOrders!==true,revision});if(options.gameplay?.profileId==='vanilla-1.260-iwbp')require('../hud/gameplay-assets.cjs').keepPalette(hudAssets,selected);}else if(options.legacyReplay)hudAssets=require('../hud/legacy-replay-assets-v0362.cjs').presentationOnly(hudAssets);probeEntries.push(...hudAssets.textures,...hudAssets.overrides,...hudAssets.scripts);}
+diff --git a/payload/resources/native/lobby/player-badges/assets.cjs b/payload/resources/native/lobby/player-badges/assets.cjs
+--- a/payload/resources/native/lobby/player-badges/assets.cjs
++++ b/payload/resources/native/lobby/player-badges/assets.cjs
+@@ -1,10 +1,10 @@
+ 'use strict';
+ const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
+ const manifest = require('./manifest.json');
+-function textures() {
+-    if (manifest.length !== 12)
++function textures(count = 12) {
++    if (manifest.length !== 13 || (count !== 12 && count !== 13))
+         throw Error('Invalid native badge artwork manifest');
+-    return manifest.map(({name, sha256}, index) => {
++    return manifest.slice(0, count).map(({name, sha256}, index) => {
+         if (name !== 'rfbadge_' + (index + 1) + '.dds')
+             throw Error('Invalid native badge artwork filename');
+         const data = fs.readFileSync(path.join(__dirname, name));
+diff --git a/payload/resources/native/lobby/player-badges/manifest.json b/payload/resources/native/lobby/player-badges/manifest.json
+--- a/payload/resources/native/lobby/player-badges/manifest.json
++++ b/payload/resources/native/lobby/player-badges/manifest.json
+@@ -46,5 +46,9 @@
+   {
+     "name": "rfbadge_12.dds",
+     "sha256": "a3c4cd911e4f9e765e61eee01e9f9f1c627379fdc8afd14326c88512bce95cdb"
++  },
++  {
++    "name": "rfbadge_13.dds",
++    "sha256": "15123bcfa9f435d039d9cc9afd4fdf2a169a5d50f7c13f797d58bce2f01ba52f"
+   }
+ ]
+diff --git a/payload/resources/native/lobby/player-badges/patch.cjs b/payload/resources/native/lobby/player-badges/patch.cjs
+--- a/payload/resources/native/lobby/player-badges/patch.cjs
++++ b/payload/resources/native/lobby/player-badges/patch.cjs
+@@ -17,8 +17,20 @@
+     assert.ok((last.characteristics & 0xe0000000) >>> 0 === 0x60000000, 'Badge code needs the existing read/execute section');
+     assert.ok(meta && pe.base + meta.rva === 0x01d90000 && meta.virtualSize >= 0x5000 &&
+         (meta.characteristics & 0xe0000000) >>> 0 === 0xc0000000, 'Badge data needs the expanded read/write metadata');
+-    const payload = fs.readFileSync(path.join(__dirname, 'renderer-x86.bin'));
+-    assert.equal(host.hash(payload), HASH);
++    const original = fs.readFileSync(path.join(__dirname, 'renderer-x86.bin'));
++    assert.equal(host.hash(original), HASH);
++    // Retain the first twelve texture IDs and redirect the lookup to an
++    // extended table in the same executable section.
++    const oldTable = 0x3b4, limit = 0x193, lookup = 0x202;
++    assert.equal(original.subarray(limit, limit + 3).toString('hex'), '83fd0c');
++    assert.equal(original.subarray(lookup, lookup + 7).toString('hex'), '8b14adb4a3da01');
++    const table = Buffer.alloc(14 * 4);
++    original.copy(table, 0, oldTable, oldTable + 13 * 4);
++    table.writeUInt32LE(ENTRY + original.length + table.length, 13 * 4);
++    const payload = Buffer.concat([original, table,
++        Buffer.from('/textures/ui/common/pc/frontend/rfbadge_13.dds\0')]);
++    payload[limit + 2] = 13;
++    payload.writeUInt32LE(ENTRY + original.length, lookup + 3);
+     assert.ok(payload.length < 4096);
+     const exe = Buffer.alloc(source.length + 4096);
+     source.copy(exe);
+@@ -44,7 +56,7 @@
+         ...result, exe,
+         manifest: { ...result.manifest, candidateSha256: host.hash(exe),
+             windowsImage: require('../../validate-image.cjs').validateImage(exe),
+-            nativePlayerBadges: { format: 's2r-native-lobby-badges-v1', entry: ENTRY, payloadSha256: HASH } }
++            nativePlayerBadges: { format: 's2r-native-lobby-badges-v1', entry: ENTRY, payloadSha256: host.hash(payload) } }
+     };
+ }
+ module.exports = { apply };
