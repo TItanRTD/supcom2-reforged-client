@@ -8,6 +8,9 @@ This repository is a source snapshot of client version **0.33.6**. It contains
 the Electron desktop code, renderer, and shared and local server code used by
 the client. This snapshot supports source review, compilation, and tests.
 
+The [0.37.6 source update](releases/0.37.6/README.md) includes the build menu,
+HUD, and replay scoreboard changes with regression tests.
+
 The playable client requires the separately distributed Reforged installer,
 its native integration resources, and a supported Steam installation of
 Supreme Commander 2. The installer, native gameplay payloads, game-derived

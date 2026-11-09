@@ -1,0 +1,444 @@
+diff --git a/app/package.json b/app/package.json
+--- a/app/package.json
++++ b/app/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "supcom2-reforged-client",
+-  "version": "0.37.5",
++  "version": "0.37.6",
+   "private": true,
+   "description": "Supreme Commander 2: Reforged community client",
+   "author": "TitanRT",
+diff --git a/app/dist/node/shared/model.js b/app/dist/node/shared/model.js
+--- a/app/dist/node/shared/model.js
++++ b/app/dist/node/shared/model.js
+@@ -4,7 +4,7 @@
+ exports.isSteamLobbyId = isSteamLobbyId;
+ // Protocol version belongs to this launcher, not to the SC2 executable.
+ exports.PROTOCOL = 9;
+-exports.CLIENT_VERSION = '0.37.5';
++exports.CLIENT_VERSION = '0.37.6';
+ exports.SUPPORT_URL = 'https://supcom2reforged.com/support';
+ exports.NATIVE_HOST_TTL_MS = 20_000;
+ exports.AUTO_LINK_TTL_MS = 12_000;
+diff --git a/app/dist/web/shared/model.js b/app/dist/web/shared/model.js
+--- a/app/dist/web/shared/model.js
++++ b/app/dist/web/shared/model.js
+@@ -1,6 +1,6 @@
+ // Protocol version belongs to this launcher, not to the SC2 executable.
+ export const PROTOCOL = 9;
+-export const CLIENT_VERSION = '0.37.5';
++export const CLIENT_VERSION = '0.37.6';
+ export const SUPPORT_URL = 'https://supcom2reforged.com/support';
+ export const NATIVE_HOST_TTL_MS = 20_000;
+ export const AUTO_LINK_TTL_MS = 12_000;
+diff --git a/app/dist/node/shared/replay-scoreboard.js b/app/dist/node/shared/replay-scoreboard.js
+new file mode 100644
+--- /dev/null
++++ b/app/dist/node/shared/replay-scoreboard.js
+@@ -0,0 +1,37 @@
++"use strict";
++
++function isRecordedSlot(value) {
++    return Number.isInteger(value) && value >= 0 && value < 8;
++}
++
++function isBadgeCode(value) {
++    if (!Number.isInteger(value) || value < 1 || value > 0xc7)
++        return false;
++    const experience = value & 15;
++    const recognition = value >>> 4;
++    return experience <= 7 && (recognition === 0 || recognition >= 8);
++}
++
++function playerDisplayFields(player) {
++    return {
++        ...(isRecordedSlot(player.startPosition) ? { startPosition: player.startPosition } : {}),
++        ...(Number.isFinite(player.rating) && Math.abs(player.rating) <= 1000000 ? { rating: player.rating } : {}),
++        ...(isBadgeCode(player.badgeCode) ? { badgeCode: player.badgeCode } : {}),
++    };
++}
++
++// Native scoreboard slots use exact names. Ignore ambiguous names and slots
++// rather than assigning one player's rating to another army.
++function uniqueScoreboardPlayers(players) {
++    const slots = new Map(), names = new Map();
++    for (const p of players) {
++        if (p.ai || p.observer || !isRecordedSlot(p.startPosition) || !/^[A-Za-z0-9_]{3,24}$/.test(p.name))
++            continue;
++        const name = p.name.toLowerCase();
++        names.set(name, (names.get(name) ?? 0) + 1);
++        slots.set(p.startPosition, slots.has(p.startPosition) ? null : p);
++    }
++    return [...slots.values()].filter(p => p && names.get(p.name.toLowerCase()) === 1);
++}
++
++module.exports = { playerDisplayFields, uniqueScoreboardPlayers };
+diff --git a/app/dist/node/server/replay-metadata.js b/app/dist/node/server/replay-metadata.js
+--- a/app/dist/node/server/replay-metadata.js
++++ b/app/dist/node/server/replay-metadata.js
+@@ -1,12 +1,13 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.validateReplayMetadata = validateReplayMetadata;
++const { playerDisplayFields } = require("../shared/replay-scoreboard");
+ const research_publication_1 = require("./research-publication");
+ function validateReplayMetadata(raw, sha) {
+     const v = raw;
+     if (!v || v.format !== 's2r-replay-v1' || v.sha256 !== sha || v.playback !== 'reforged' || typeof v.clientVersion !== 'string' || !/^0\.\d+\.\d+$/.test(v.clientVersion) || !Array.isArray(v.players) || v.players.length > 32 || typeof v.gameType !== 'string' || v.gameType.length > 40)
+         throw Error('Invalid replay provenance.');
+     const players = v.players.map(p => { if (!p || typeof p.name !== 'string' || !p.name.trim() || p.name.length > 64 || /[\x00-\x1f\x7f]/.test(p.name) || !Number.isInteger(p.team) || p.team < -1 || p.team > 16 || typeof p.ai !== 'boolean' || typeof p.observer !== 'boolean')
+-        throw Error('Invalid replay roster.'); return { name: p.name, team: p.team, ai: p.ai, observer: p.observer }; });
++        throw Error('Invalid replay roster.'); return { name: p.name, team: p.team, ai: p.ai, observer: p.observer, ...(p.ai || p.observer ? {} : playerDisplayFields(p)) }; });
+     return { format: 's2r-replay-v1', sha256: sha, playback: 'reforged', clientVersion: v.clientVersion, players, gameType: v.gameType,...(v.gameplay?{gameplay:require('./gameplay').verifyPatch(v.gameplay)}:{}), ...(v.research ? { research: (0, research_publication_1.verifyRuleset)(v.research) } : {}) };
+ }
+diff --git a/app/dist/node/server/data/public-changelog.json b/app/dist/node/server/data/public-changelog.json
+--- a/app/dist/node/server/data/public-changelog.json
++++ b/app/dist/node/server/data/public-changelog.json
+@@ -1,4 +1,10 @@
+ [
++  {
++    "version": "0.37.6",
++    "date": "2026-11-09",
++    "title": "Build menus and replay scoreboard",
++    "body": "- Show the unlocked Illuminate Tactical Missile Launcher on Combat page one and keep the Anti-Air Tower available alongside Light Point Defense.\n- Give Classic factories Units and Factory Add-ons tabs. ACUs and engineers use their own Basic, Advanced, and Experimental tiers.\n- Save available match-start Forge Ratings and badges with Reforged replay metadata. Show badges between the faction icon and the player name.\n- Restore faction-colored Reforged queue icons on normal queue updates, with white icons in Classic."
++  },
+   {
+     "version": "0.37.5",
+     "date": "2026-11-09",
+diff --git a/app/dist/node/desktop/lobby-badge-data.js b/app/dist/node/desktop/lobby-badge-data.js
+--- a/app/dist/node/desktop/lobby-badge-data.js
++++ b/app/dist/node/desktop/lobby-badge-data.js
+@@ -19,15 +19,27 @@
+     buffer.write(label, offset, badgeSize - 1, 'utf8');
+ }
+ 
+-function addBadges(buffer, slot, name, player) {
+-    if (!Array.isArray(player?.badges) || !/^[A-Za-z0-9_]{3,24}$/.test(name))
+-        return false;
+-    const allowed = player.badges.filter(badge => ids.includes(badge?.id) && typeof badge.label === 'string');
+-    const selected = [
++function selectedBadges(badges) {
++    if (!Array.isArray(badges))
++        return [];
++    const allowed = badges.filter(badge => ids.includes(badge?.id) && typeof badge.label === 'string');
++    return [
+         allowed.find(badge => badge.id.startsWith('experience-')),
+         ['owner-developer', 'moderator', 'tournament-winner', 'contributor', 'playtester']
+             .map(id => allowed.find(badge => badge.id === id)).find(Boolean),
+     ];
++}
++
++function scoreboardBadgeCode(badges) {
++    const [experience, recognition] = selectedBadges(badges);
++    const index = badge => badge ? ids.indexOf(badge.id) + 1 : 0;
++    return index(experience) | (index(recognition) << 4);
++}
++
++function addBadges(buffer, slot, name, player) {
++    if (!/^[A-Za-z0-9_]{3,24}$/.test(name))
++        return false;
++    const selected = selectedBadges(player?.badges);
+     if (!selected.some(Boolean))
+         return false;
+     const row = header + rowSize * slot;
+@@ -91,4 +103,4 @@
+     buffer.writeUInt32LE(sequence >>> 0, 12);
+     return buffer;
+ }
+-module.exports = { badgeTrailer, rankedSlots };
++module.exports = { badgeTrailer, rankedSlots, scoreboardBadgeCode };
+diff --git a/app/dist/node/desktop/lobby-services.js b/app/dist/node/desktop/lobby-services.js
+--- a/app/dist/node/desktop/lobby-services.js
++++ b/app/dist/node/desktop/lobby-services.js
+@@ -8,7 +8,9 @@
+ const ranked_lobby_1 = require("./ranked-lobby");
+ const balance_1 = require("../shared/balance");
+ const lobby_balance_1 = require("./lobby-balance");
+-const { badgeTrailer, rankedSlots } = require("./lobby-badge-data");
++const { replayPlayers } = require("./replay-provenance");
++const { playerDisplayFields, uniqueScoreboardPlayers } = require("../shared/replay-scoreboard");
++const { badgeTrailer, rankedSlots, scoreboardBadgeCode } = require("./lobby-badge-data");
+ const MAGIC = 0x42523253;
+ function encodeLobbyServices(value, sequence, staging) {
+     const b = Buffer.alloc(2048);
+@@ -72,29 +74,57 @@
+             b.writeUInt32LE(Math.max(0, ['UEF', 'Cybran', 'Illuminate'].indexOf(p.faction)), at + 124);
+         }
+     }
+-    const roster = value.sample?.roster;
+-    if (roster?.ReadOK && Array.isArray(roster.Entries)) {
+-        b.writeUInt32LE(0x52353253, 0x6c0);
+-        b.writeUInt32LE(0x47363253, 0x6c4);
+-        for (const p of roster.Entries) {
+-            const index = p.StartPosition;
+-            if (p.AI || p.Observer || !Number.isInteger(index) || index < 0 || index > 7)
+-                continue;
+-            const record = value.players.filter(r => r.name.toLowerCase() === p.Name.toLowerCase());
+-            if (record.length !== 1 || Buffer.byteLength(p.Name) > 24)
+-                continue;
+-            b.write(p.Name, 0x738 + index * 25, 24, 'utf8');
+-            if (!Number.isFinite(record[0].rating))
+-                continue;
+-            b.writeFloatLE(record[0].rating, 0x6a0 + index * 4);
+-            b.write(record[0].rating.toFixed(1).slice(0, 7), index < 6 ? 0x6c8 + index * 8 : 0x710 + (index - 6) * 8, 7, 'ascii');
+-            const games = record[0].games;
+-            b.write(typeof games === 'number' && Number.isSafeInteger(games) && games >= 0 ? String(Math.min(games, 9999999)) : '--', 0x5a0 + index * 8, 7, 'utf8');
+-        }
++    const players = scoreboardPlayers(replayPlayers(value.sample), value.players);
++    writeScoreboard(b, players);
++    for (const p of players) {
++        const index = p.startPosition;
++        if (p.rating === undefined)
++            continue;
++        b.write(p.rating.toFixed(1).slice(0, 7), index < 6 ? 0x6c8 + index * 8 : 0x710 + (index - 6) * 8, 7, 'ascii');
++        b.write(typeof p.games === 'number' && Number.isSafeInteger(p.games) && p.games >= 0 ? String(Math.min(p.games, 9999999)) : '--', 0x5a0 + index * 8, 7, 'utf8');
+     }
+     const trailer = badgeTrailer(value, sequence);
+     return trailer ? Buffer.concat([b, trailer]) : b;
+ }
++function scoreboardPlayers(roster, directory) {
++    const byName = new Map();
++    for (const player of directory) {
++        const name = player.name.toLowerCase();
++        byName.set(name, byName.has(name) ? null : player);
++    }
++    return uniqueScoreboardPlayers(roster).flatMap(player => {
++        const account = byName.get(player.name.toLowerCase());
++        return account ? [{
++            name: player.name,
++            ...playerDisplayFields({ startPosition: player.startPosition, rating: account.rating, badgeCode: scoreboardBadgeCode(account.badges) }),
++            games: account.games,
++        }] : [];
++    });
++}
++
++function writeScoreboard(buffer, players) {
++    if (!players.length)
++        return;
++    buffer.writeUInt32LE(0x52353253, 0x6c0);
++    buffer.writeUInt32LE(0x47363253, 0x6c4);
++    for (const { startPosition, name, rating, badgeCode } of players) {
++        buffer.write(name, 0x738 + startPosition * 25, 24, 'ascii');
++        buffer.writeFloatLE(rating ?? NaN, 0x6a0 + startPosition * 4);
++        buffer[0x6f8 + startPosition] = badgeCode ?? 0;
++    }
++}
++
++function encodeReplayScoreboard(players) {
++    const rows = uniqueScoreboardPlayers(players).map(player => ({ name: player.name, ...playerDisplayFields(player) }))
++        .filter(player => player.rating !== undefined || player.badgeCode);
++    if (!rows.length)
++        return;
++    const snapshot = Buffer.alloc(2048);
++    writeScoreboard(snapshot, rows);
++    return snapshot;
++}
++exports.encodeReplayScoreboard = encodeReplayScoreboard;
++
+ class LobbyServices {
+     context;
+     file;
+@@ -106,6 +136,9 @@
+     sequence = 0;
+     ack = 0;
+     customRegistered = '';
++    scoreboard = [];
++    scoreboardLocked = false;
++    lastDirectory;
+     countdown = new ranked_lobby_1.RankedCountdown();
+     constructor(context, file, now = Date.now, synchronize = async () => { }) {
+         this.context = context;
+@@ -115,6 +148,12 @@
+     }
+     stop() { this.stopped = true; this.countdown.reset(); }
+     async tick(sample) {
++        const roster = replayPlayers(sample);
++        if (!this.scoreboardLocked && sample.nativeLaunchState?.slice(0, 2).includes(1)) {
++            if (roster.length && this.lastDirectory)
++                this.scoreboard = scoreboardPlayers(roster, this.lastDirectory);
++            this.scoreboardLocked = true;
++        }
+         if (this.stopped || this.busy || this.now() - this.last < 1500)
+             return;
+         this.busy = true;
+@@ -144,6 +183,10 @@
+             const value = await this.request('lobby-balance');
+             if (this.stopped || value.roomId !== this.context.roomId)
+                 return;
++            if (!this.scoreboardLocked && sample.visible === true && roster.length) {
++                this.lastDirectory = value.players;
++                this.scoreboard = scoreboardPlayers(roster, this.lastDirectory);
++            }
+             const staging = this.countdown.update(value.ladder, sample, this.now());
+             const bytes = encodeLobbyServices({ ...value, ack: this.ack, sample }, ++this.sequence, staging), temp = this.file + '.' + (0, node_crypto_1.randomUUID)() + '.tmp';
+             try {
+diff --git a/app/dist/node/desktop/main.js b/app/dist/node/desktop/main.js
+--- a/app/dist/node/desktop/main.js
++++ b/app/dist/node/desktop/main.js
+@@ -463,6 +463,7 @@
+         }
+         async function confirmPrepared(prepared){if(preparation.gameplay){const proof=prepared.gameplayProof;if(!proof||proof.profileId!==preparation.gameplay.profileId)throw Error('Prepared game ruleset differs from the selected patch.');await (0,room_share_1.roomApi)((0,room_share_1.validateHostRoom)(roomInput),'gameplay/ready',{gameplayId:preparation.gameplay.id,simulationHash:proof.simulationHash});}}
+         let replayRoster = [];
++        let replayRosterLocked = false;
+         let savedReplayFile;
+         let args = [], executable = selectedPath;
+         let logPath;
+@@ -600,7 +601,9 @@
+             const replayFile = await replayCatalog.resolve(input?.replayId);
+             const playback = input?.playback === undefined ? await (0, replay_provenance_2.detectReplayPlayback)(replayFile) : (0, replay_playback_1.replayPlayback)(input.playback);
+             if (playback === 'reforged') {
+-                preparation.gameplay=await require('./replay-provenance').readReplayGameplay(replayFile);
++                const metadata = await (0, replay_provenance_2.readReplayMetadata)(replayFile);
++                preparation.gameplay = metadata?.gameplay;
++                preparation.replayPlayers = metadata?.players;
+                 preparation.researchRuleset = preparation.gameplay?.research??await (0, replay_provenance_1.readReplayResearch)(replayFile);
+                 preparation.replayRevision = (0, replay_version_1.replayRevision)(await (0, replay_provenance_1.readReplayVersion)(replayFile));
+             }
+@@ -662,7 +665,7 @@
+             if (logPath && node_path_1.default.basename(executable) === 'SupremeCommander2.ReforgedLobby.exe')
+                 void Promise.resolve().then(() => __importStar(require('./game-firewall'))).then(async ({ gameFirewall }) => { const result = await gameFirewall(nativeAssets(), executable, false, false); await (0, promises_1.writeFile)(node_path_1.default.join(node_path_1.default.dirname(logPath), 'firewall-after-exit.json'), JSON.stringify({ at: new Date().toISOString(), clientVersion: model_1.CLIENT_VERSION, ...result }, null, 2)); }).catch(() => { });
+             if (savedReplayFile)
+-                void (0, replay_provenance_2.finishSavedReplay)(savedReplayFile, replayRoster, model_1.CLIENT_VERSION, new Date(), preparation.researchRuleset,preparation.gameplay).catch(error => { if(code!==null&&code!==0&&error?.code==='ENOENT')return;void attempt?.record('replay-naming-unavailable', error instanceof Error ? error.message : String(error)).catch(() => { }); });
++                void (0, replay_provenance_2.finishSavedReplay)(savedReplayFile, (0, replay_provenance_2.snapshotReplayPlayers)(replayRoster, services?.scoreboard), model_1.CLIENT_VERSION, new Date(), preparation.researchRuleset,preparation.gameplay).catch(error => { if(code!==null&&code!==0&&error?.code==='ENOENT')return;void attempt?.record('replay-naming-unavailable', error instanceof Error ? error.message : String(error)).catch(() => { }); });
+             services?.stop();
+             lobbyMaps.stop();
+             launching = false;
+@@ -692,8 +695,13 @@
+         if (mode === 'lan-test' || mode === 'native-host' || mode === 'relay-host')
+             udpProbePid = child.pid ?? null;
+         if ((['host', 'join', 'native-host', 'native-guest', 'lan-test', 'relay-host', 'relay-guest'].includes(mode)) && tracker && child.pid && readerLog)
+-            monitor = (0, native_host_1.watchGameLobby)(child.pid, nativeAssets(), readerLog, tracker, mapTracker ?? undefined, sample => { const roster = (0, replay_provenance_2.replayPlayers)(sample); if (roster.length)
+-                replayRoster = roster; lobbyMaps.ingest(sample); void services?.tick(sample); if (mode !== 'host')
++            monitor = (0, native_host_1.watchGameLobby)(child.pid, nativeAssets(), readerLog, tracker, mapTracker ?? undefined, sample => {
++                const roster = (0, replay_provenance_2.replayPlayers)(sample);
++                if (!replayRosterLocked && roster.length)
++                    replayRoster = roster;
++                if (replayRoster.length && sample.nativeLaunchState?.slice(0, 2).includes(1))
++                    replayRosterLocked = true;
++                lobbyMaps.ingest(sample); void services?.tick(sample); if (mode !== 'host')
+                 nativeObservation.ingest(sample); const r = sample; if (r.guestProbeReadOK === true)
+                 nativeGuestMessage = `Native guest phase ${r.guestProbePhase}; request ${r.guestJoinRequest}; callback ${r.guestJoinCallback}; error ${r.guestJoinError}. ${r.visible === true && r.isHost === false ? 'Guest lobby observed.' : 'Confirm game entry on screen.'}`; });
+         child.unref();
+diff --git a/app/dist/node/desktop/native-host.js b/app/dist/node/desktop/native-host.js
+--- a/app/dist/node/desktop/native-host.js
++++ b/app/dist/node/desktop/native-host.js
+@@ -84,7 +84,7 @@
+     options.onProgress?.('preparing-display-settings');
+     const hudScale = options.hudScale ?? (customLobby ? await (0, hud_display_1.detectHudScale)() : 1);
+     const key = JSON.stringify([node_path_1.default.resolve(executable), node_path_1.default.resolve(assets), customLobby, hudScale, legacyReplay, options.researchRuleset?.id,options.gameplay?.id, options.replayRevision, options.replayPresentation === true, options.replayFile]);
+-    const result = await (0, preparation_monitor_1.runNativePreparation)([executable, assets, runRoot, mapId, lanProbe, customLobby, guestAddress, steamGuest, lobbyTitle, relay, preferences, legacyReplay, { hudScale, replayPresentation: options.replayPresentation, replayFile: options.replayFile, replayRevision: options.replayRevision, rankedMatch: options.rankedMatch, researchRuleset: options.researchRuleset,gameplay:options.gameplay, expectedLobby: preparedResearch.get(key) }], options);
++    const result = await (0, preparation_monitor_1.runNativePreparation)([executable, assets, runRoot, mapId, lanProbe, customLobby, guestAddress, steamGuest, lobbyTitle, relay, preferences, legacyReplay, { hudScale, replayPresentation: options.replayPresentation, replayFile: options.replayFile, replayPlayers: options.replayPlayers, replayRevision: options.replayRevision, rankedMatch: options.rankedMatch, researchRuleset: options.researchRuleset,gameplay:options.gameplay, expectedLobby: preparedResearch.get(key) }], options);
+     if (result.lobbyCache) {
+         preparedResearch.set(key, structuredClone(result.lobbyCache));
+         if (preparedResearch.size > 8)
+@@ -174,7 +174,9 @@
+     if (customLobby && relay && preferences?.name)
+         result = lobbyBuilder.withPlayerName(result, preferences.name);
+     if (customLobby) {
+-        result = lobbyBuilder.withServices(result, node_path_1.default.join(run, 'lobby-services.bin'), options.rankedMatch === true);
++        const replayScoreboard = options.replayPresentation && !legacyReplay && options.replayPlayers
++            ? require('./lobby-services').encodeReplayScoreboard(options.replayPlayers) : undefined;
++        result = lobbyBuilder.withServices(result, node_path_1.default.join(run, 'lobby-services.bin'), options.rankedMatch === true, replayScoreboard);
+         result = require(node_path_1.default.join(assets, 'hud', 'presentation.cjs')).apply(result, { readOnly: legacyReplay });
+     }
+     if (customLobby)
+diff --git a/app/dist/node/desktop/native-lobby.js b/app/dist/node/desktop/native-lobby.js
+--- a/app/dist/node/desktop/native-lobby.js
++++ b/app/dist/node/desktop/native-lobby.js
+@@ -85,9 +85,9 @@
+         cache.set(id, result);
+     } return cache.get(id); };
+     const control = () => build('control', false);
+-    const modern = (revision, scale, readOnlyProfile = legacyReplay, rules = revision === targetRevision && !readOnlyProfile ? research : undefined,game=gameplay) => build('hud-' + revision + '-' + scale + (readOnlyProfile ? '-legacy-replay' : '') + (rules ? '-research-' + rules.id : '')+'-game-'+(game?.id??game?.profileId??''), { ...(game?{gameplay:game}:{}),layout: true, textures, hud: hudLua, hudScale: scale, ...(rules ? { research: rules } : {}), ...(readOnlyProfile && ['current', '0374', '0373', '0372', '0371', '0370', '03619', '03618', '03617', '03616', '03615', '03614', '03613', '03612', '03611', '03610', '0369', '0368', '0367', '0366', '0365', '0364', '0363', '0362', '0361', '0355', '0354', '0353', '0352', '0351', '0350', '0343', '0342', '0341', '0340', '0337', '0336', '0335', '0334', '0333', '0332', '0331', '0327', '0326', '0325', '0324', '0323', '0322', '0321', '0320', '0313', '0312', '0311', '0310', '0306', '0305', '0304', '0301', '0300', '0292', '0291', '0290', '0282', '0280', '02733', '02732', '02731', '02730', '02729', '02728', '02727', '02726', '02725', '02723', '02722', '02721', '02720', '02719', '02711'].includes(revision) ? { legacyReplay: true } : {}), ...((revision==='current'||revision==='0374'||revision==='0373'||revision==='0372'||revision==='0371'||revision==='0370'||revision==='03619'||revision==='03618'||revision==='03617'||revision==='03616'||revision==='03615'||revision==='03614'||revision==='03613'||revision==='03612'||revision==='03611'||revision==='03610'||revision==='0369'||revision==='0368'||revision==='0367'||revision==='0366'||revision==='0365'||revision==='0364'||revision==='0363'||revision==='0362'||revision==='0361'||revision==='0355')&&!readOnlyProfile ? { playerBadges:true } : {}) }, revision === 'current' ? builder : revision === '0374' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0374.cjs')) : revision === '0373' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0373.cjs')) : revision === '0372' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0372.cjs')) : revision === '0371' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0371.cjs')) : revision === '0370' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0370.cjs')) : revision === '03619' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03619.cjs')) : revision === '03618' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03618.cjs')) : revision === '03617' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03617.cjs')) : revision === '03616' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03616.cjs')) : revision === '03615' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03615.cjs')) : revision === '03614' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03614.cjs')) : revision === '03613' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03613.cjs')) : revision === '03612' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03612.cjs')) : revision === '03611' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03611.cjs')) : revision === '03610' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03610.cjs')) : revision === '0369' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0369.cjs')) : revision === '0368' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0368.cjs')) : revision === '0367' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0367.cjs')) : revision === '0366' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0366.cjs')) : revision === '0365' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0365.cjs')) : revision === '0364' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0364.cjs')) : revision === '0363' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0363.cjs')) : revision === '0362' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0362.cjs')) : revision === '0361' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0361.cjs')) : revision === '0355' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0355.cjs')) : revision === '0354' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0354.cjs')) : revision === '0353' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0353.cjs')) : revision === '0352' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0352.cjs')) : revision === '0351' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0351.cjs')) : revision === '0350' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0350.cjs')) : revision === '0343' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0343.cjs')) : revision === '0342' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0342.cjs')) : revision === '0341' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0341.cjs')) : revision === '0340' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0340.cjs')) : revision === '0337' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0337.cjs')) : revision === '0336' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0336.cjs')) : revision === '0335' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0335.cjs')) : revision === '0334' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0334.cjs')) : revision === '0333' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0333.cjs')) : revision === '0332' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0332.cjs')) : revision === '0331' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0331.cjs')) : revision === '0329' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0329.cjs')) : revision === '0328' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0328.cjs')) : revision === '0327' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0327.cjs')) : revision === '0326' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0326.cjs')) : revision === '0325' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0325.cjs')) : revision === '0324' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0324.cjs')) : revision === '0323' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0323.cjs')) : revision === '0322' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0322.cjs')) : revision === '0321' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0321.cjs')) : revision === '0320' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0320.cjs')) : revision === '0313' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0313.cjs')) : revision === '0312' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0312.cjs')) : revision === '0311' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0311.cjs')) : revision === '0310' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0310.cjs')) : revision === '0306' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0306.cjs')) : revision === '0305' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0305.cjs')) : revision === '0304' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0304.cjs')) : revision === '0301' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0301.cjs')) : revision === '0300' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0300.cjs')) : revision === '0292' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0292.cjs')) : revision === '0291' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0291.cjs')) : revision === '0290' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0290.cjs')) : revision === '0282' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0282.cjs')) : revision === '0280' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0280.cjs')) : revision === '02733' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02733.cjs')) : revision === '02732' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02732.cjs')) : revision === '02731' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02731.cjs')) : revision === '02730' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02730.cjs')) : revision === '02729' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02729.cjs')) : revision === '02728' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02728.cjs')) : revision === '02727' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02727.cjs')) : revision === '02726' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02726.cjs')) : revision === '02725' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02725.cjs')) : revision === '02723' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02723.cjs')) : revision === '02722' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02722.cjs')) : revision === '02721' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02721.cjs')) : revision === '02720' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02720.cjs')) : revision === '02719' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02719.cjs')) : revision === '02711' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02711.cjs')) : revision === '02710' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02710.cjs')) : revision === '0279' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0279.cjs')) : revision === '0278' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0278.cjs')) : revision === '0277' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0277.cjs')) : revision === '0276' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0276.cjs')) : revision === '0275' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0275.cjs')) : revision === '0274' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0274.cjs')) : revision === '0273' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0273.cjs')) : revision === '0272' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0272.cjs')) : revision === '0271' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0271.cjs')) : revision === '0266' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0266.cjs')) : revision === '0265' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0265.cjs')) : revision === '0264' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0264.cjs')) : revision === '0263' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0263.cjs')) : revision === '0262' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0262.cjs')) : revision === '0261' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0261.cjs')) : revision === '0260' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0260.cjs')) : revision === '0252' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0252.cjs')) : revision === '0250' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0250.cjs')) : revision === '0244' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0244.cjs')) : revision === '0243' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0243.cjs')) : revision === '0242' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0242.cjs')) : revision === '0241' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0241.cjs')) : revision === '0240' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0240.cjs')) : (revision === '17' || revision === '18' || revision === '19') ? { build: require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02316.cjs'))[revision === '19' ? 'buildV19' : revision === '18' ? 'buildV18' : 'buildV17'] } : require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v023' + revision + '.cjs')));
+-    const replayBuild = (revision, scale, legacy, presentation = '0375', mapTexture, rules,game=gameplay) => build('replay-ui' + presentation + '-' + revision + '-' + scale + '-' + legacy + '-' + (mapTexture ? mapTexture.name + ':' + mapTexture.sha256 : '') + (rules ? '-research-' + rules.id : '')+'-game-'+(game?.id??game?.profileId??''), { ...(game?{gameplay:game}:{}),layout: true, textures, hud: hudLua, hudScale: scale, legacyReplay: legacy, replayPresentation: true, replaySimulationRevision: presentation === revision && ['0350','0351','0352'].includes(presentation) ? 'current' : revision, ...(['0326', '0327', '0328', '0329', '0330', '0331', '0332', '0335', '0336', '0337', '0340', '0341', '0342', '0343', '0350', '0354', '0355', '0360', '0362', '0363', '0364', '0368', '0369', '03610', '03611', '03612', '03613', '03614', '03615', '03616', '03617', '03618', '03619', '0370', '0371', '0372', '0373', '0374', '0375'].includes(presentation) && mapTexture ? { replayTerrain: [{ name: mapTexture.name, data: mapTexture.data, map: mapTexture.map }] } : {}), ...(rules ? { research: rules } : {}) }, presentation === '0374' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0374.cjs')) : presentation === '0373' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0373.cjs')) : presentation === '0372' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0372.cjs')) : presentation === '0371' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0371.cjs')) : presentation === '0370' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0370.cjs')) : presentation === '03619' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03619.cjs')) : presentation === '03618' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03618.cjs')) : presentation === '03617' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03617.cjs')) : presentation === '03616' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03616.cjs')) : presentation === '03615' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03615.cjs')) : presentation === '03614' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03614.cjs')) : presentation === '03613' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03613.cjs')) : presentation === '03612' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03612.cjs')) : presentation === '03611' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03611.cjs')) : presentation === '03610' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03610.cjs')) : presentation === '0369' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0369.cjs')) : presentation === '0368' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0368.cjs')) : presentation === '0364' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0364.cjs')) : presentation === '0363' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0363.cjs')) : presentation === '0362' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0362.cjs')) : presentation === '0360' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0361.cjs')) : presentation === '0355' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0355.cjs')) : presentation === '0354' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0354.cjs')) : presentation === '0353' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0353.cjs')) : presentation === '0352' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0352.cjs')) : presentation === '0351' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0351.cjs')) : presentation === '0350' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0350.cjs')) : presentation === '0343' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0343.cjs')) : presentation === '0342' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0342.cjs')) : presentation === '0341' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0341.cjs')) : presentation === '0340' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0340.cjs')) : presentation === '0337' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0337.cjs')) : presentation === '0336' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0336.cjs')) : presentation === '0335' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0335.cjs')) : presentation === '0332' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0334.cjs')) : presentation === '0330' || presentation === '0331' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0331.cjs')) : presentation === '0329' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0329.cjs')) : presentation === '0328' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0328.cjs')) : presentation === '0327' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0327.cjs')) : presentation === '0326' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0326.cjs')) : presentation === '0325' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0325.cjs')) : presentation === '0324' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0324.cjs')) : presentation === '0323' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0323.cjs')) : presentation === '0322' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0322.cjs')) : presentation === '0321' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0321.cjs')) : presentation === '0320' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0320.cjs')) : presentation === '0313' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0313.cjs')) : presentation === '0312' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0312.cjs')) : builder);
+-    const latest = (scale) => replayPresentation ? replayBuild(targetRevision, scale, legacyReplay, '0375', terrain, research) : custom ? (modernHud ? modern(targetRevision, scale) : build('lobby', { layout: true, textures })) : control();
++    const modern = (revision, scale, readOnlyProfile = legacyReplay, rules = revision === targetRevision && !readOnlyProfile ? research : undefined,game=gameplay) => build('hud-' + revision + '-' + scale + (readOnlyProfile ? '-legacy-replay' : '') + (rules ? '-research-' + rules.id : '')+'-game-'+(game?.id??game?.profileId??''), { ...(game?{gameplay:game}:{}),layout: true, textures, hud: hudLua, hudScale: scale, ...(rules ? { research: rules } : {}), ...(readOnlyProfile && ['current', '0375', '0374', '0373', '0372', '0371', '0370', '03619', '03618', '03617', '03616', '03615', '03614', '03613', '03612', '03611', '03610', '0369', '0368', '0367', '0366', '0365', '0364', '0363', '0362', '0361', '0355', '0354', '0353', '0352', '0351', '0350', '0343', '0342', '0341', '0340', '0337', '0336', '0335', '0334', '0333', '0332', '0331', '0327', '0326', '0325', '0324', '0323', '0322', '0321', '0320', '0313', '0312', '0311', '0310', '0306', '0305', '0304', '0301', '0300', '0292', '0291', '0290', '0282', '0280', '02733', '02732', '02731', '02730', '02729', '02728', '02727', '02726', '02725', '02723', '02722', '02721', '02720', '02719', '02711'].includes(revision) ? { legacyReplay: true } : {}), ...((revision==='current'||revision==='0375'||revision==='0374'||revision==='0373'||revision==='0372'||revision==='0371'||revision==='0370'||revision==='03619'||revision==='03618'||revision==='03617'||revision==='03616'||revision==='03615'||revision==='03614'||revision==='03613'||revision==='03612'||revision==='03611'||revision==='03610'||revision==='0369'||revision==='0368'||revision==='0367'||revision==='0366'||revision==='0365'||revision==='0364'||revision==='0363'||revision==='0362'||revision==='0361'||revision==='0355')&&!readOnlyProfile ? { playerBadges:true } : {}) }, revision === 'current' ? builder : revision === '0375' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0375.cjs')) : revision === '0374' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0374.cjs')) : revision === '0373' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0373.cjs')) : revision === '0372' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0372.cjs')) : revision === '0371' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0371.cjs')) : revision === '0370' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0370.cjs')) : revision === '03619' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03619.cjs')) : revision === '03618' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03618.cjs')) : revision === '03617' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03617.cjs')) : revision === '03616' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03616.cjs')) : revision === '03615' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03615.cjs')) : revision === '03614' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03614.cjs')) : revision === '03613' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03613.cjs')) : revision === '03612' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03612.cjs')) : revision === '03611' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03611.cjs')) : revision === '03610' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03610.cjs')) : revision === '0369' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0369.cjs')) : revision === '0368' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0368.cjs')) : revision === '0367' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0367.cjs')) : revision === '0366' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0366.cjs')) : revision === '0365' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0365.cjs')) : revision === '0364' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0364.cjs')) : revision === '0363' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0363.cjs')) : revision === '0362' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0362.cjs')) : revision === '0361' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0361.cjs')) : revision === '0355' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0355.cjs')) : revision === '0354' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0354.cjs')) : revision === '0353' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0353.cjs')) : revision === '0352' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0352.cjs')) : revision === '0351' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0351.cjs')) : revision === '0350' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0350.cjs')) : revision === '0343' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0343.cjs')) : revision === '0342' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0342.cjs')) : revision === '0341' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0341.cjs')) : revision === '0340' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0340.cjs')) : revision === '0337' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0337.cjs')) : revision === '0336' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0336.cjs')) : revision === '0335' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0335.cjs')) : revision === '0334' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0334.cjs')) : revision === '0333' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0333.cjs')) : revision === '0332' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0332.cjs')) : revision === '0331' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0331.cjs')) : revision === '0329' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0329.cjs')) : revision === '0328' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0328.cjs')) : revision === '0327' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0327.cjs')) : revision === '0326' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0326.cjs')) : revision === '0325' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0325.cjs')) : revision === '0324' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0324.cjs')) : revision === '0323' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0323.cjs')) : revision === '0322' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0322.cjs')) : revision === '0321' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0321.cjs')) : revision === '0320' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0320.cjs')) : revision === '0313' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0313.cjs')) : revision === '0312' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0312.cjs')) : revision === '0311' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0311.cjs')) : revision === '0310' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0310.cjs')) : revision === '0306' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0306.cjs')) : revision === '0305' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0305.cjs')) : revision === '0304' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0304.cjs')) : revision === '0301' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0301.cjs')) : revision === '0300' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0300.cjs')) : revision === '0292' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0292.cjs')) : revision === '0291' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0291.cjs')) : revision === '0290' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0290.cjs')) : revision === '0282' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0282.cjs')) : revision === '0280' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0280.cjs')) : revision === '02733' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02733.cjs')) : revision === '02732' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02732.cjs')) : revision === '02731' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02731.cjs')) : revision === '02730' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02730.cjs')) : revision === '02729' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02729.cjs')) : revision === '02728' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02728.cjs')) : revision === '02727' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02727.cjs')) : revision === '02726' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02726.cjs')) : revision === '02725' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02725.cjs')) : revision === '02723' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02723.cjs')) : revision === '02722' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02722.cjs')) : revision === '02721' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02721.cjs')) : revision === '02720' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02720.cjs')) : revision === '02719' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02719.cjs')) : revision === '02711' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02711.cjs')) : revision === '02710' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02710.cjs')) : revision === '0279' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0279.cjs')) : revision === '0278' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0278.cjs')) : revision === '0277' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0277.cjs')) : revision === '0276' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0276.cjs')) : revision === '0275' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0275.cjs')) : revision === '0274' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0274.cjs')) : revision === '0273' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0273.cjs')) : revision === '0272' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0272.cjs')) : revision === '0271' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0271.cjs')) : revision === '0266' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0266.cjs')) : revision === '0265' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0265.cjs')) : revision === '0264' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0264.cjs')) : revision === '0263' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0263.cjs')) : revision === '0262' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0262.cjs')) : revision === '0261' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0261.cjs')) : revision === '0260' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0260.cjs')) : revision === '0252' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0252.cjs')) : revision === '0250' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0250.cjs')) : revision === '0244' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0244.cjs')) : revision === '0243' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0243.cjs')) : revision === '0242' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0242.cjs')) : revision === '0241' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0241.cjs')) : revision === '0240' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0240.cjs')) : (revision === '17' || revision === '18' || revision === '19') ? { build: require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v02316.cjs'))[revision === '19' ? 'buildV19' : revision === '18' ? 'buildV18' : 'buildV17'] } : require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v023' + revision + '.cjs')));
++    const replayBuild = (revision, scale, legacy, presentation = '0376', mapTexture, rules,game=gameplay) => build('replay-ui' + presentation + '-' + revision + '-' + scale + '-' + legacy + '-' + (mapTexture ? mapTexture.name + ':' + mapTexture.sha256 : '') + (rules ? '-research-' + rules.id : '')+'-game-'+(game?.id??game?.profileId??''), { ...(game?{gameplay:game}:{}),layout: true, textures, hud: hudLua, hudScale: scale, legacyReplay: legacy, replayPresentation: true, replaySimulationRevision: presentation === revision && ['0350','0351','0352'].includes(presentation) ? 'current' : revision, ...(['0326', '0327', '0328', '0329', '0330', '0331', '0332', '0335', '0336', '0337', '0340', '0341', '0342', '0343', '0350', '0354', '0355', '0360', '0362', '0363', '0364', '0368', '0369', '03610', '03611', '03612', '03613', '03614', '03615', '03616', '03617', '03618', '03619', '0370', '0371', '0372', '0373', '0374', '0375', '0376'].includes(presentation) && mapTexture ? { replayTerrain: [{ name: mapTexture.name, data: mapTexture.data, map: mapTexture.map }] } : {}), ...(rules ? { research: rules } : {}) }, presentation === '0375' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0375.cjs')) : presentation === '0374' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0374.cjs')) : presentation === '0373' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0373.cjs')) : presentation === '0372' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0372.cjs')) : presentation === '0371' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0371.cjs')) : presentation === '0370' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0370.cjs')) : presentation === '03619' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03619.cjs')) : presentation === '03618' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03618.cjs')) : presentation === '03617' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03617.cjs')) : presentation === '03616' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03616.cjs')) : presentation === '03615' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03615.cjs')) : presentation === '03614' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03614.cjs')) : presentation === '03613' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03613.cjs')) : presentation === '03612' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03612.cjs')) : presentation === '03611' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03611.cjs')) : presentation === '03610' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v03610.cjs')) : presentation === '0369' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0369.cjs')) : presentation === '0368' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0368.cjs')) : presentation === '0364' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0364.cjs')) : presentation === '0363' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0363.cjs')) : presentation === '0362' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0362.cjs')) : presentation === '0360' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0361.cjs')) : presentation === '0355' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0355.cjs')) : presentation === '0354' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0354.cjs')) : presentation === '0353' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0353.cjs')) : presentation === '0352' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0352.cjs')) : presentation === '0351' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0351.cjs')) : presentation === '0350' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0350.cjs')) : presentation === '0343' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0343.cjs')) : presentation === '0342' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0342.cjs')) : presentation === '0341' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0341.cjs')) : presentation === '0340' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0340.cjs')) : presentation === '0337' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0337.cjs')) : presentation === '0336' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0336.cjs')) : presentation === '0335' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0335.cjs')) : presentation === '0332' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0334.cjs')) : presentation === '0330' || presentation === '0331' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0331.cjs')) : presentation === '0329' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0329.cjs')) : presentation === '0328' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0328.cjs')) : presentation === '0327' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0327.cjs')) : presentation === '0326' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0326.cjs')) : presentation === '0325' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0325.cjs')) : presentation === '0324' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0324.cjs')) : presentation === '0323' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0323.cjs')) : presentation === '0322' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0322.cjs')) : presentation === '0321' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0321.cjs')) : presentation === '0320' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0320.cjs')) : presentation === '0313' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0313.cjs')) : presentation === '0312' ? require(node_path_1.default.join(assets, 'lobby', 'indexed-probe-v0312.cjs')) : builder);
++    const latest = (scale) => replayPresentation ? replayBuild(targetRevision, scale, legacyReplay, '0376', terrain, research) : custom ? (modernHud ? modern(targetRevision, scale) : build('lobby', { layout: true, textures })) : control();
+     const probe = node_path_1.default.join(data, builder.PROBE_NAME), toc = node_path_1.default.join(root, 'toc.win.bdf');
+     for (const p of [probe, toc]) {
+         await ordinary(p);
+@@ -130,7 +130,7 @@
+         const n = previous?.hud?.scale;
+         if (typeof n === 'number' && n >= 0.75 && n <= 2.5 && Math.round(n * 8) === n * 8)
+             previousScale = n;
+-        if (['replay-presentation-0312', 'replay-presentation-0313', 'replay-presentation-0320', 'replay-presentation-0321', 'replay-presentation-0322', 'replay-presentation-0323', 'replay-presentation-0324', 'replay-presentation-0325', 'replay-presentation-0326', 'replay-presentation-0327', 'replay-presentation-0328', 'replay-presentation-0329', 'replay-presentation-0330', 'replay-presentation-0331', 'replay-presentation-0332', 'replay-presentation-0335', 'replay-presentation-0336', 'replay-presentation-0337', 'replay-presentation-0340', 'replay-presentation-0341', 'replay-presentation-0342', 'replay-presentation-0343', 'replay-presentation-0350', 'replay-presentation-0351', 'replay-presentation-0352', 'replay-presentation-0353', 'replay-presentation-0354', 'replay-presentation-0355', 'replay-presentation-0360', 'replay-presentation-0362', 'replay-presentation-0363', 'replay-presentation-0364', 'replay-presentation-0368', 'replay-presentation-0369', 'replay-presentation-03610', 'replay-presentation-03611', 'replay-presentation-03612', 'replay-presentation-03613', 'replay-presentation-03614', 'replay-presentation-03615', 'replay-presentation-03616', 'replay-presentation-03617', 'replay-presentation-03618', 'replay-presentation-03619', 'replay-presentation-0370', 'replay-presentation-0371', 'replay-presentation-0372', 'replay-presentation-0373', 'replay-presentation-0374', 'replay-presentation-0375'].includes(previous?.hud?.mode) && typeof previous.hud.originalSimulation === 'boolean') {
++        if (['replay-presentation-0312', 'replay-presentation-0313', 'replay-presentation-0320', 'replay-presentation-0321', 'replay-presentation-0322', 'replay-presentation-0323', 'replay-presentation-0324', 'replay-presentation-0325', 'replay-presentation-0326', 'replay-presentation-0327', 'replay-presentation-0328', 'replay-presentation-0329', 'replay-presentation-0330', 'replay-presentation-0331', 'replay-presentation-0332', 'replay-presentation-0335', 'replay-presentation-0336', 'replay-presentation-0337', 'replay-presentation-0340', 'replay-presentation-0341', 'replay-presentation-0342', 'replay-presentation-0343', 'replay-presentation-0350', 'replay-presentation-0351', 'replay-presentation-0352', 'replay-presentation-0353', 'replay-presentation-0354', 'replay-presentation-0355', 'replay-presentation-0360', 'replay-presentation-0362', 'replay-presentation-0363', 'replay-presentation-0364', 'replay-presentation-0368', 'replay-presentation-0369', 'replay-presentation-03610', 'replay-presentation-03611', 'replay-presentation-03612', 'replay-presentation-03613', 'replay-presentation-03614', 'replay-presentation-03615', 'replay-presentation-03616', 'replay-presentation-03617', 'replay-presentation-03618', 'replay-presentation-03619', 'replay-presentation-0370', 'replay-presentation-0371', 'replay-presentation-0372', 'replay-presentation-0373', 'replay-presentation-0374', 'replay-presentation-0375', 'replay-presentation-0376'].includes(previous?.hud?.mode) && typeof previous.hud.originalSimulation === 'boolean') {
+             previousReplay = { revision: previous.hud.simulationRevision === 'current' && ['replay-presentation-0350', 'replay-presentation-0351', 'replay-presentation-0352'].includes(previous.hud.mode) ? previous.hud.mode.slice('replay-presentation-'.length) : (0, replay_version_1.validateReplayRevision)(previous.hud.simulationRevision), legacy: previous.hud.originalSimulation, presentation: previous.hud.mode.slice('replay-presentation-'.length), terrainMap: (0, replay_terrain_1.terrainMap)(previous.hud.replayTerrain?.map) };
+         }
+     }
+@@ -190,6 +190,7 @@
+     if(previousGameId){try{const f=node_path_1.default.join(state,'published-gameplay.json'),st=await (0,promises_1.lstat)(f);if(st.isFile()&&!st.isSymbolicLink()&&st.nlink===1&&st.size<=8388608){const p=require('../server/gameplay').verifyPatch(JSON.parse(await (0,promises_1.readFile)(f,'utf8')));if(p.id===previousGameId)previousGameplay=p;}}catch{}}
+     if (!installed && previousGameplay && !previousReplay) {
+         previousGameplayKnown = same(modern('current', previousScale, false, previousGameplay.research, previousGameplay))
++            || same(modern('0375', previousScale, false, previousGameplay.research, previousGameplay))
+             || same(modern('0374', previousScale, false, previousGameplay.research, previousGameplay));
+     }
+     let previousReplayKnown = false;
+@@ -245,6 +246,8 @@
+                 yield modern('current', n, !legacyReplay);
+             }
+             for (const n of [...new Set([previousScale, hudScale, 1])]) {
++                yield modern('0375', n, false);
++                yield modern('0375', n, true);
+                 yield modern('0374', n, false);
+                 yield modern('0374', n, true);
+                 yield modern('0373', n, false);
+diff --git a/app/dist/node/desktop/profile-catalog.js b/app/dist/node/desktop/profile-catalog.js
+--- a/app/dist/node/desktop/profile-catalog.js
++++ b/app/dist/node/desktop/profile-catalog.js
+@@ -74,7 +74,7 @@
+         const source = await profileSourceDigest(assets, progress);
+         if (c.source !== source)
+             return unavailable('Interface source fingerprint differs; expected ' + c.source + ', actual ' + source);
+-        if (c.profiles.some((p) => !p || !['current', '0374', '0373', '0372', '0371', '0370', '03619', '03618', '03617', '03616', '03615', '03614', '03613', '03612', '03611', '03610', '0369', '0368', '0367', '0366', '0365', '0364', '0363', '0362', '0361', '0355', '0354', '0353', '0352', '0351', '0350', '0343', '0342', '0341', '0340', '0337', '0336', '0335', '0334', '0333', '0332', '0331', '0329', '0328', '0327', '0326', '0325', '0324', '0323', '0322', '0321', '0320', '0313', '0312', '0311', '0310', '0306', '0305', '0304', '0301', '0300', '0292', '0291', '0290', '0282', '0280', '02733', '02732', '02731', '02730', '02729', '02728', '02727', '02726', '02725', '02723', 'control'].includes(p.revision) || typeof p.custom !== 'boolean' || typeof p.modernHud !== 'boolean' || typeof p.legacyReplay !== 'boolean' || !Number.isFinite(p.scale) || !/^([a-f0-9]{64})$/.test(p.tocSha256) || !/^([a-f0-9]{64})$/.test(p.archiveSha256) || !p.manifest))
++        if (c.profiles.some((p) => !p || !['current', '0375', '0374', '0373', '0372', '0371', '0370', '03619', '03618', '03617', '03616', '03615', '03614', '03613', '03612', '03611', '03610', '0369', '0368', '0367', '0366', '0365', '0364', '0363', '0362', '0361', '0355', '0354', '0353', '0352', '0351', '0350', '0343', '0342', '0341', '0340', '0337', '0336', '0335', '0334', '0333', '0332', '0331', '0329', '0328', '0327', '0326', '0325', '0324', '0323', '0322', '0321', '0320', '0313', '0312', '0311', '0310', '0306', '0305', '0304', '0301', '0300', '0292', '0291', '0290', '0282', '0280', '02733', '02732', '02731', '02730', '02729', '02728', '02727', '02726', '02725', '02723', 'control'].includes(p.revision) || typeof p.custom !== 'boolean' || typeof p.modernHud !== 'boolean' || typeof p.legacyReplay !== 'boolean' || !Number.isFinite(p.scale) || !/^([a-f0-9]{64})$/.test(p.tocSha256) || !/^([a-f0-9]{64})$/.test(p.archiveSha256) || !p.manifest))
+             return unavailable('Packaged interface catalog contains an invalid profile');
+         progress('preparing-profile-cache-status', 'Verified ' + c.profiles.length + ' interface profiles');
+         return c;
+diff --git a/app/dist/node/desktop/replay-provenance.js b/app/dist/node/desktop/replay-provenance.js
+--- a/app/dist/node/desktop/replay-provenance.js
++++ b/app/dist/node/desktop/replay-provenance.js
+@@ -17,6 +17,7 @@
+ const node_path_1 = __importDefault(require("node:path"));
+ const node_crypto_1 = require("node:crypto");
+ const community_1 = require("../server/community");
++const { playerDisplayFields, uniqueScoreboardPlayers } = require("../shared/replay-scoreboard");
+ const digest = (b) => (0, node_crypto_1.createHash)('sha256').update(b).digest('hex');
+ async function smallJson(file) { const s = await (0, promises_1.lstat)(file); if (!s.isFile() || s.isSymbolicLink() || s.size > 8_388_608)
+     throw Error('Invalid replay metadata.'); return JSON.parse(await (0, promises_1.readFile)(file, 'utf8')); }
+@@ -24,9 +25,20 @@
+     const r = value?.roster;
+     if (r?.ReadOK !== true || !Array.isArray(r.Entries) || r.Entries.length > 32)
+         return [];
+-    const players = r.Entries.flatMap((entry) => { const p = entry; return p && typeof p.Name === 'string' && p.Name.trim().length > 0 && p.Name.length <= 64 && !/[\x00-\x1f\x7f]/.test(p.Name) && Number.isInteger(p.Team) && (p.Team === -1 || Number(p.Team) >= 1 && Number(p.Team) <= 8) && typeof p.AI === 'boolean' && typeof p.Observer === 'boolean' ? [{ name: p.Name.trim(), team: Number(p.Team), ai: p.AI, observer: p.Observer }] : []; });
++    const players = r.Entries.flatMap((entry) => { const p = entry; return p && typeof p.Name === 'string' && p.Name.trim().length > 0 && p.Name.length <= 64 && !/[\x00-\x1f\x7f]/.test(p.Name) && Number.isInteger(p.Team) && (p.Team === -1 || Number(p.Team) >= 1 && Number(p.Team) <= 8) && typeof p.AI === 'boolean' && typeof p.Observer === 'boolean' ? [{ name: p.Name.trim(), team: Number(p.Team), ai: p.AI, observer: p.Observer, ...playerDisplayFields({ startPosition: p.StartPosition }) }] : []; });
+     return players.length === r.Entries.length && players.filter(p => !p.observer).length <= 8 ? players : [];
+ }
++function snapshotReplayPlayers(roster, snapshot) {
++    const bySlot = new Map(uniqueScoreboardPlayers(snapshot ?? []).map(player => [player.startPosition, player]));
++    return roster.map(player => {
++        const record = bySlot.get(player.startPosition);
++        return !player.ai && !player.observer && record?.name === player.name
++            ? { ...player, ...playerDisplayFields(record) }
++            : player;
++    });
++}
++exports.snapshotReplayPlayers = snapshotReplayPlayers;
++
+ function replayFormat(roster) {
+     const p = roster.filter(p => !p.observer);
+     if (p.length < 2)
+diff --git a/app/dist/node/desktop/replay-version.js b/app/dist/node/desktop/replay-version.js
+--- a/app/dist/node/desktop/replay-version.js
++++ b/app/dist/node/desktop/replay-version.js
+@@ -5,7 +5,7 @@
+ exports.validateReplayRevision = validateReplayRevision;
+ const model_1 = require("../shared/model");
+ /** Only revisions with a preserved generator can select simulation data. */
+-exports.REPLAY_REVISIONS = ['0374', '0373', '0372', '0371', '0370', '03619', '03618', '03617', '03616', '03615', '03614', '03613', '03612', '03611', '03610', '0369', '0368', '0367', '0366', '0365', '0364', '0363', '0362', '0361', '0355', '0354', '0353', '0352', '0351', '0350', '0343', '0342', '0341', '0340', '0337', '0336', '0335', '0334', '0333', '0332', '0331', '0329', '0328', '0327', '0326', '0325', '0324', '0323', '0322', '0321', '0320', '0313', '0312', '0311', '0310', '0306', '0305', '0304', '0301', '0300', '0292', '0291', '0290', '0282', '0280', '02733', '02732', '02731', '02730', '02729', '02728', '02727', '02726', '02725', '02723', '02722', '02721', '02720', '02719'];
++exports.REPLAY_REVISIONS = ['0375', '0374', '0373', '0372', '0371', '0370', '03619', '03618', '03617', '03616', '03615', '03614', '03613', '03612', '03611', '03610', '0369', '0368', '0367', '0366', '0365', '0364', '0363', '0362', '0361', '0355', '0354', '0353', '0352', '0351', '0350', '0343', '0342', '0341', '0340', '0337', '0336', '0335', '0334', '0333', '0332', '0331', '0329', '0328', '0327', '0326', '0325', '0324', '0323', '0322', '0321', '0320', '0313', '0312', '0311', '0310', '0306', '0305', '0304', '0301', '0300', '0292', '0291', '0290', '0282', '0280', '02733', '02732', '02731', '02730', '02729', '02728', '02727', '02726', '02725', '02723', '02722', '02721', '02720', '02719'];
+ function replayRevision(version) {
+     if (version === undefined || version === model_1.CLIENT_VERSION)
+         return 'current';
