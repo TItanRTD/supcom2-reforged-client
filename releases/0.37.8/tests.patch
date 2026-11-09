@@ -1,0 +1,159 @@
+diff --git a/test-fixtures.cjs b/test-fixtures.cjs
+--- a/test-fixtures.cjs
++++ b/test-fixtures.cjs
+@@ -3,3 +3,4 @@
+ for(const [v,names]of [['03612',['geometry','stats']],['03613',['reforged_geometry','reforged_ranges']],['03610',['researchview']],['0369',['hud']]]){const p=require(N+'/hud/frozen-v'+v+'.cjs');for(const name of names){const source=name.startsWith('reforged_')?name:'reforged_'+name;fs.writeFileSync(B+'/build/'+name+'-'+v+'.lua',p.readInput(source+'.lua'));}}
+ const lua=fs.readFileSync(path.join(B,'../recovered-inputs/lua.scd')),bundle=require(N+'/hud/assets.cjs').assets(lua,1);fs.writeFileSync(B+'/build/research-data.lua',bundle.scripts.find(e=>e.name.replaceAll('\\','/').toLowerCase()==='lua/ui/game/reforged_research_data.lua').data);
+ fs.writeFileSync(B+'/build/construction-costs.lua',bundle.scripts.find(e=>e.name.replaceAll('\\','/').toLowerCase()==='lua/ui/game/reforged_construction_costs.lua').data);
++fs.writeFileSync(B+'/build/dlc-construction-costs.lua',bundle.scripts.find(e=>e.name.replaceAll('\\','/').toLowerCase()==='mods/dlc1/shadow/lua/ui/game/reforged_construction_costs.lua').data);
+diff --git a/tests/test-ability-ranges.py b/tests/test-ability-ranges.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test-ability-ranges.py
+@@ -0,0 +1,110 @@
++"""Exercise armed retail command mode with the actual assembled DLC effects."""
++from pathlib import Path
++import os
++import unittest
++from lupa.lua51 import LuaRuntime
++
++BASE = Path(__file__).resolve().parents[1]
++HUD = Path(os.environ.get('S2R_NATIVE', BASE/'payload/resources/native'))/'hud'
++DATA = BASE/'build/dlc-construction-costs.lua'
++
++class MobilityRanges(unittest.TestCase):
++    def setUp(self):
++        lua = self.lua = LuaRuntime(unpack_returned_tuples=True)
++        lua.execute("""
++modules={}
++function module(code)local e=setmetatable({},{__index=_G});local f=assert(loadstring(code));setfenv(f,e);f();return e end
++function import(path)return assert(modules[path],path)end
++function Vector(x,y,z)return {x,y,z}end
++function GetFocusArmy()return 1 end
++function GetGameTimeSeconds()return 10 end
++function GetTextureDimensions()return 256,256 end
++function ReforgedIsObserving()return observing==true end
++function GetRolloverInfo(id)
++ if id=='RF:Overlays'then return true,nativeCount or 0,false end
++ if id=='RF:Overlay'then return true,18,29,0,9,1,1,1,1,0 end
++end
++function GetUnitCommandData(units)return units[1].orders end
++function ParseEntityCategory(expression)return expression end
++function EntityCategoryContains(expression,id)
++ return expression==id or expression=='CYBRAN COMMAND -ESCAPEPOD' and id=='ucl0001'
++  or expression=='ILLUMINATE COMMAND -ESCAPEPOD' and id=='uil0001'
++end
++draws={}
++local function decal()
++ local d={}
++ function d:SetTexture(value)self.texture=value end
++ function d:SetScale(value)self.scale=value end
++ function d:SetPosition(value)self.position=value end
++ function d:Destroy()self.destroyed=true end
++ draws[#draws+1]=d
++ return d
++end
++modules['/lua/user/UserDecal.lua']={UserDecal=decal}
++function unit(id,bp,orders,army,x)
++ return {GetEntityId=function()return id end,GetBlueprint=function()return bp end,
++  GetPosition=function()return {x,2,400}end,GetArmy=function()return army end,orders=orders}
++end
++cybran=unit('17',{BlueprintId='ucl0001',General={JumpRange=70}},{'RULEUCC_Move','RULEUCC_Jump'},1,100)
++illuminate=unit('18',{BlueprintId='uil0001',General={TeleportRange=70}},{'RULEUCC_Teleport'},1,300)
++locked=unit('19',{BlueprintId='ucl0001',General={JumpRange=70}},{'RULEUCC_Move'},1,200)
++other=unit('20',{BlueprintId='ucl0001',General={JumpRange=70}},{'RULEUCC_Jump'},2,250)
++function sample(command,selection)
++ local kind=ability.Targeting(command and 'order',command and {name=command})
++ local all,coverage=ranges:Rings(selection,nil,false,command~=nil,nil,kind)
++ local rings={}
++ for _,ring in ipairs(all)do if ring.kind=='ability'then rings[#rings+1]=ring end end
++ return rings,coverage,all
++end
++""")
++        g = lua.globals()
++        g.modules['/lua/ui/game/reforged_construction_costs.lua'] = g.module(DATA.read_text())
++        for name in ['geometry','unitinfo','research_effects','ability_ranges','ranges']:
++            g.modules['/lua/ui/game/reforged_'+name+'.lua'] = g.module((HUD/('reforged_'+name+'.lua')).read_text())
++        lua.execute("""
++ability=import('/lua/ui/game/reforged_ability_ranges.lua')
++ranges=import('/lua/ui/game/reforged_ranges.lua').Create()
++""")
++
++    def test_live_command_uses_unit_origin_and_ignores_cursor_overlay(self):
++        self.lua.execute("""
++nativeCount=1
++local rings,coverage,all=sample('RULEUCC_Jump',{cybran,locked,other})
++assert(#rings==1 and #all==2 and all[2].kind=='overlay')
++assert(coverage.abilityCount==1 and coverage.abilityRadius==70)
++assert(rings[1].center[1]==100 and rings[1].center[3]==400 and rings[1].radius==70)
++assert(ranges:DrawAbilityFill(rings)==1 and draws[1].position[1]==100)
++local teleport=sample('RULEUCC_Teleport',{illuminate,cybran})
++assert(#teleport==1 and teleport[1].center[1]==300 and teleport[1].radius==70)
++assert(ranges:DrawAbilityFill(teleport)==1 and draws[1].position[1]==300)
++local canceled=sample(nil,{cybran})
++assert(#canceled==0 and ranges:DrawAbilityFill(canceled)==0 and draws[1].scale[1]==0)
++local move=sample('RULEUCC_Move',{cybran})
++assert(#move==0)
++""")
++
++    def test_native_completed_research_and_scoped_dlc_modifiers(self):
++        self.lua.execute("""
++local ids={CCB_JUMPJETDISTANCE=7,ICB_TELEPORTDISTANCE=9}
++function GetResearchId(id)return ids[id]or -1 end
++function IsCompletedResearch(id)return done==id end
++done=7
++assert(sample('RULEUCC_Jump',{cybran})[1].radius==210)
++assert(sample('RULEUCC_Teleport',{illuminate})[1].radius==70)
++done=9
++assert(sample('RULEUCC_Jump',{cybran})[1].radius==70)
++assert(sample('RULEUCC_Teleport',{illuminate})[1].radius==140)
++""")
++
++    def test_focused_research_sample_and_observer_guard(self):
++        self.lua.execute("""
++function ReforgedObserverSnapshot()
++ return {focus=1,time=10,armies={[1]={research={CCB_JUMPJETDISTANCE=1}}}}
++end
++assert(sample('Jump',{cybran})[1].radius==210)
++observing=true
++assert(#sample('Jump',{cybran})==0)
++""")
++
++if __name__ == '__main__':
++    unittest.main(verbosity=2)
+diff --git a/tests/test-assets.cjs b/tests/test-assets.cjs
+--- a/tests/test-assets.cjs
++++ b/tests/test-assets.cjs
+@@ -14,7 +14,7 @@
+ for(const t of old.textures)assert(t.data.equals(current.textures.find(n=>norm(n)===norm(t)).data),'Existing texture changed '+t.name);
+ assert.equal(current.textures.length,old.textures.length+159);
+ assert.deepEqual(current.textures.filter(t=>/\/rfq_/.test(t.name)).map(t=>t.name.split('/').at(-1).slice(4,-4)).sort(),require(native+'/hud/queue-icons.json'));
+-const allowedRoots=['reforged_keys','reforged_gridkeys','reforged_classickeys','reforged_classicmodel','reforged_classicbuild','reforged_interfacehud','reforged_hotkeys','reforged_window','reforged_build','reforged_layout','reforged_hud','reforged_stats','reforged_converterui','reforged_menubutton','reforged_controls','reforged_ranges','reforged_buildcost','reforged_nativehud','reforged_replay','reforged_observer','reforged_replaymap'];
++const allowedRoots=['reforged_keys','reforged_gridkeys','reforged_classickeys','reforged_classicmodel','reforged_classicbuild','reforged_interfacehud','reforged_hotkeys','reforged_window','reforged_build','reforged_layout','reforged_hud','reforged_stats','reforged_converterui','reforged_menubutton','reforged_controls','reforged_ranges','reforged_buildcost','reforged_research_effects','reforged_ability_ranges','reforged_nativehud','reforged_replay','reforged_observer','reforged_replaymap'];
+ const allowed=new Set(allowedRoots.map(n=>'lua/ui/game/'+n+'.lua'));allowed.add('lua/sim/reforged_commands.lua');allowed.add('lua/ui/game/reforged_construction_costs.lua');allowed.add('mods/dlc1/shadow/lua/ui/game/reforged_construction_costs.lua');allowed.add('lua/ui/game/rf_awareness_notices.lua');allowed.add('lua/ui/game/rf_awareness_controller.lua');
+ function descendants(bundle,name){const map=new Map(bundle.scripts.map(f=>[norm(f),f]));while(map.has(name)){allowed.add(name);const match=map.get(name).data.toString().match(/^doscript\('\/([^']+)',getfenv\(1\)\)/);if(!match)break;name=match[1].toLowerCase();}}
+ for(const root of [...allowed])for(const bundle of [old,current])descendants(bundle,root);
+@@ -29,9 +29,9 @@
+ }
+ 
+ const compose=require(native+'/hud/replay-presentation.cjs').compose,replays=[],replaySources=new Map();
+-for(const revision of ['0368','0370','0371','0372','0373','0374','0375','0376','current','legacy']){
++for(const revision of ['0368','0370','0371','0372','0373','0374','0375','0376','0377','current','legacy']){
+  const legacy=revision==='legacy',selected=legacy?current:revision==='current'?current:require(native+'/hud/frozen-v'+revision+'.cjs').assets(lua,1.125);
+- const result=compose(current,selected,entries,{legacy,revision:legacy?'retail':revision});assert.equal(result.manifest.mode,'replay-presentation-0377');assert(result.manifest.telemetryOnly);
++ const result=compose(current,selected,entries,{legacy,revision:legacy?'retail':revision});assert.equal(result.manifest.mode,'replay-presentation-0378');assert(result.manifest.telemetryOnly);
+  for(const row of result.manifest.delegatedClasses){const source=(legacy?entries:selected.scripts).find(e=>norm(e)===row.path),saved=result.scripts.find(e=>norm(e)===row.delegatedPath);assert(source.data.equals(saved.data),revision+' '+row.path);}
+  for(const e of result.scripts.filter(e=>norm(e).endsWith('.lua')&&e.data.subarray(0,4).toString('hex')!=='1b4c7561'))replaySources.set(e.name+':'+require('node:crypto').createHash('sha256').update(e.data).digest('hex'),[e.name,e.data.toString('base64')]);
+  replays.push({revision,scripts:result.scripts.length});
+diff --git a/tests/test-stock-orders.cjs b/tests/test-stock-orders.cjs
+--- a/tests/test-stock-orders.cjs
++++ b/tests/test-stock-orders.cjs
+@@ -21,7 +21,7 @@
+ assert(!by('lua/ui/game/reforged_controls.lua').toString().includes('if ReforgedRetailGameplay then'));
+ assert(by('lua/ui/game/reforged_converterui.lua').toString().includes('ReforgedRetailGameplay==true'));
+ const builder=require(N+'/lobby/indexed-probe.cjs'),input=n=>fs.readFileSync('recovered-inputs/'+n);
+-for(const [revision,wantOrders]of [['current',true],['0376',true],['0374',true],['0373',true],['0372',false]]){
++for(const [revision,wantOrders]of [['current',true],['0377',true],['0376',true],['0374',true],['0373',true],['0372',false]]){
+  const result=builder.build(input('ui.scd'),input('toc.win.bdf'),input('ui.scd.enc'),{layout:true,hud:lua,hudScale:1,replayPresentation:true,replaySimulationRevision:revision,gameplay:p});
+  const bundle=ui.readZip(result.archive,4096),callback=bundle.find(e=>norm(e)==='lua/sim/simcallbacks.lua');
+  assert.equal(!!callback,wantOrders,revision+' stock replay callbacks');assert.equal(result.manifest.hud.stockOrders,wantOrders);assert.equal(result.manifest.hud.originalSimulation,!wantOrders);

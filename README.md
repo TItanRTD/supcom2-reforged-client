@@ -14,6 +14,9 @@ HUD, and replay scoreboard changes with regression tests.
 The [0.37.7 source update](releases/0.37.7/README.md) includes ability ranges,
 construction prices, Caster recognition, and leaderboard changes.
 
+The [0.37.8 source update](releases/0.37.8/README.md) fixes the Jump Jet and
+Teleport range indicators.
+
 The playable client requires the separately distributed Reforged installer,
 its native integration resources, and a supported Steam installation of
 Supreme Commander 2. The installer, native gameplay payloads, game-derived

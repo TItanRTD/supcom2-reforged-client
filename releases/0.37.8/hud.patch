@@ -1,0 +1,418 @@
+diff --git a/payload/resources/native/hud/assets.cjs b/payload/resources/native/hud/assets.cjs
+--- a/payload/resources/native/hud/assets.cjs
++++ b/payload/resources/native/hud/assets.cjs
+@@ -9,7 +9,7 @@
+  const scripts=[{name:'lua/ui/game/reforged_keys.lua',data:fs.readFileSync(path.join(__dirname,'reforged_keys.lua'))},{name:'lua/ui/game/reforged_layout.lua',data:Buffer.from(fs.readFileSync(path.join(__dirname,'reforged_layout.lua'),'utf8')+'\nscale = '+scale+'\n')},{name:'lua/ui/game/gamemain_pc.lua',data:fs.readFileSync(path.join(__dirname,'bootstrap.lua'))},{name:'lua/ui/game/rf023_pc_original.lua',data:pc.data},{name:'lua/ui/game/reforged_hud.lua',data:fs.readFileSync(path.join(__dirname,'reforged_hud.lua'))},{name:'lua/ui/game/reforged_build.lua',data:fs.readFileSync(path.join(__dirname,'reforged_build.lua'))}];
+  scripts.push({name:'lua/ui/game/reforged_observer.lua',data:fs.readFileSync(path.join(__dirname,'reforged_observer.lua'))});
+  scripts.push({name:'lua/ui/game/reforged_replay.lua',data:fs.readFileSync(path.join(__dirname,'reforged_replay.lua'))});
+- for(const name of ['geometry','unitinfo','controls','hotkeys','ranges','window','converterui','replaymap','researchview','research_notices','menubutton','experience_guard','performance','gridkeys','classickeys','buildcost','classicmodel','classicbuild','interfacehud'])scripts.push({name:'lua/ui/game/reforged_'+name+'.lua',data:fs.readFileSync(path.join(__dirname,'reforged_'+name+'.lua'))});
++ for(const name of ['geometry','unitinfo','controls','hotkeys','ranges','window','converterui','replaymap','researchview','research_notices','menubutton','experience_guard','performance','gridkeys','classickeys','research_effects','ability_ranges','buildcost','classicmodel','classicbuild','interfacehud'])scripts.push({name:'lua/ui/game/reforged_'+name+'.lua',data:fs.readFileSync(path.join(__dirname,'reforged_'+name+'.lua'))});
+  scripts.push({name:'lua/ui/game/reforged_nativehud.lua',data:Buffer.concat([Buffer.from('Controls='+require('./research.cjs').literal(require('./native-layout.json').controls)+'\n'),fs.readFileSync(path.join(__dirname,'reforged_nativehud.lua'))])});
+  for(const name of ['commands','reclaim','research_tracking'])scripts.push({name:'lua/sim/reforged_'+name+'.lua',data:fs.readFileSync(path.join(__dirname,'reforged_'+name+'.lua'))});
+  const range=entries.find(e=>e.name.toLowerCase().replaceAll('\\','/')==='lua/ui/game/rangeoverlayparams.lua');assert.ok(range);
+diff --git a/payload/resources/native/hud/overlays-x86.s b/payload/resources/native/hud/overlays-x86.s
+--- a/payload/resources/native/hud/overlays-x86.s
++++ b/payload/resources/native/hud/overlays-x86.s
+@@ -303,12 +303,9 @@
+  movups xmm0,xmmword ptr [esi]
+  movups xmmword ptr [edi+16],xmm0
+  /* Classify by the exact retail extractor vtable, never a guessed BP range. */
+- /* WaypointAbility is a native targeting range, distinct from generic
+-  * overlays. It must survive Lua's separate command-mode preview filter. */
+- mov edx,5
++ xor edx,edx
+  cmp dword ptr [esp+36],0x009f200a
+  je classified
+- xor edx,edx
+  cmp dword ptr [esp+36],0x009f1ebd
+  je build_filter
+  mov eax,dword ptr [COLOR]
+diff --git a/payload/resources/native/hud/presentation.cjs b/payload/resources/native/hud/presentation.cjs
+--- a/payload/resources/native/hud/presentation.cjs
++++ b/payload/resources/native/hud/presentation.cjs
+@@ -15,7 +15,7 @@
+ const WINDOW_ENTRY=ENTRY+0x3000;
+ const WINDOW_HASH='9b786e568df1207eb017414832ed08c6fbd57931d2ba7734cb73a58046c9961d';
+ const OVERLAY_ENTRY=ENTRY+0x2000,OVERLAY_APPEND=OVERLAY_ENTRY+0x400;
+-const OVERLAY_HASH='21a7b01c63b278e9f0253500370f3af7771ec76b058dc458cd8682f41edea4a2';
++const OVERLAY_HASH='2b1733bf412feb25c6f72486e8822e68cee75398d245fded3fa81b9e0d443cbf';
+ const RANGE_HASH='2eb53be21d9fa53f055334693e18c812e9094f2e1c2727ecc3cd8a2f59fad5fb';
+ function apply(result,options={}){
+  const readOnly=options.readOnly===true;
+@@ -88,7 +88,7 @@
+  const windowsImage=require('../validate-image.cjs').validateImage(exe);
+  const allowed=[[queueIconAt,queueIconAt+5],[p.nt+6,p.nt+8],[o+4,o+12],[o+56,o+60],[o+64,o+68],[header,header+40],[last.at+8,last.at+12],[last.at+16,last.at+20],[at,at+6],[mini,mini+4],[minimapEdges,minimapEdges+1],[stateAt,stateAt+7],[infoAt,infoAt+7],[appendAt,appendAt+5],[economyAt,economyAt+6],[queueAt,queueAt+7],[repeatAt,repeatAt+5],[inputAt,inputAt+5],...hotkeyCalls.map(at=>[at,at+5])];
+  for(let i=0;i<source.length;i++)if(source[i]!==exe[i]&&!allowed.some(([a,b])=>i>=a&&i<b))throw Error('Unexpected HUD executable change');
+- return {...result,exe,manifest:{...result.manifest,candidateSha256:host.hash(exe),windowsImage,hudPresentation:{liveLayout:{version:'0.32.3',entry:ENTRY+0x3800,drawEntry:ENTRY+0x3810,payloadSha256:LAYOUT_HASH,records:256,scope:'UI-only command/queue rectangles registered from the live Maui frame and reapplied before native draw; native actions and visibility remain unchanged.'},replayEconomy:{entry:ENTRY+0x2800,payloadSha256:REPLAY_ECONOMY_HASH,readOnly:true,scope:'Optional observer/replay army index reads synchronized UI economy without changing focus or simulation. No-argument retail path preserved.'},version:'0.27.20',windowControls:{version:'0.27.30',entry:WINDOW_ENTRY,payloadSha256:WINDOW_HASH,state:0x01d94a00,scope:'Fixed UI-only status/borderless/restore actions for the current process-owned window, original placement preservation, monitor bounds and rollback. Other rollover calls retain the existing native chain.'},overlayReader:{version:'0.36.12-ability-range1',entry:OVERLAY_ENTRY,appendHook:0x9f3240,payloadSha256:OVERLAY_HASH,scope:'Scoped retail placement/ability/normal overlay collection into 64 bounded private UI records. Native waypoint ability records use kind 5 independently of Lua command mode. Native extractor and visibility/category predicates; temporary empty vector avoids GPU drawing. Ordinary native vector appends retain their original implementation.'},rangeReader:{version:'0.27.29',entry:RANGE_ENTRY,payloadSha256:RANGE_HASH,scope:'Read-only native UserUnit weapon/intel getters, render-interpolated position and recon-filtered highlighted-unit snapshot. Existing info modes retain their original fallback.'},readOnly,simulationQueueHooks:!readOnly,payloadSha256:PAYLOAD_HASH,entry:ENTRY,drawHook:HOOK,stateBinding:'UIIsConstructionEnabled retains its original first boolean and adds native minimap-expanded plus viewed-army current/cap values and an optional fifth Forge Rating result for an exact commander-name argument. GetRolloverInfo(entityId) uses the existing recon-filtered user-unit snapshot writer and returns synced experience when available.',scope:readOnly?'Legacy replay presentation only; native command-queue insertion and repeat hooks remain original.':'Native draw admission and read-only UI snapshots. Retail HUD initialization, update and shutdown instructions are unchanged; the Lua import order fixes startup. Optional simulation queue accessor rotates newly appended priority orders to the front with the retail active-task cancellation notification before rotation and controller wake for Alt factory and Space structure insertion; native Options, console and Lua keybinding entry points offer the Reforged editor with a scoped acknowledgement and original native fallback; existing native queue objects and flags are preserved using retail intrusive-reference assignment and temporary-reference cleanup. Finite factory identities are held in a separate bounded RW table; no command counts are modified. Only the retail completion call site suppresses their repeat; the shared predicate stays byte-identical. Actual native-world events are exposed synchronously to the Lua input router before retail area gestures. Capture-scoped motion and the retail focus-aware held-button query clear lost releases. Networking unchanged.',minimap:'RF:Mini resizes the displayed native g_map aperture and map_image, preserving their crop, and matches the backing WorldView; retail BE3E20 scene-scale edge overwrites remain disabled. Native camera, render, visibility and input retained.',acceptance:'Actual Windows battle loading, drawing and input still require an in-game test.'}}};
++ return {...result,exe,manifest:{...result.manifest,candidateSha256:host.hash(exe),windowsImage,hudPresentation:{liveLayout:{version:'0.32.3',entry:ENTRY+0x3800,drawEntry:ENTRY+0x3810,payloadSha256:LAYOUT_HASH,records:256,scope:'UI-only command/queue rectangles registered from the live Maui frame and reapplied before native draw; native actions and visibility remain unchanged.'},replayEconomy:{entry:ENTRY+0x2800,payloadSha256:REPLAY_ECONOMY_HASH,readOnly:true,scope:'Optional observer/replay army index reads synchronized UI economy without changing focus or simulation. No-argument retail path preserved.'},version:'0.27.20',windowControls:{version:'0.27.30',entry:WINDOW_ENTRY,payloadSha256:WINDOW_HASH,state:0x01d94a00,scope:'Fixed UI-only status/borderless/restore actions for the current process-owned window, original placement preservation, monitor bounds and rollback. Other rollover calls retain the existing native chain.'},overlayReader:{version:'0.27.28',entry:OVERLAY_ENTRY,appendHook:0x9f3240,payloadSha256:OVERLAY_HASH,scope:'Scoped retail placement/normal overlay collection into 64 bounded private UI records. Native extractor and visibility/category predicates; temporary empty vector avoids GPU drawing. Ordinary native vector appends retain their original implementation.'},rangeReader:{version:'0.27.29',entry:RANGE_ENTRY,payloadSha256:RANGE_HASH,scope:'Read-only native UserUnit weapon/intel getters, render-interpolated position and recon-filtered highlighted-unit snapshot. Existing info modes retain their original fallback.'},readOnly,simulationQueueHooks:!readOnly,payloadSha256:PAYLOAD_HASH,entry:ENTRY,drawHook:HOOK,stateBinding:'UIIsConstructionEnabled retains its original first boolean and adds native minimap-expanded plus viewed-army current/cap values and an optional fifth Forge Rating result for an exact commander-name argument. GetRolloverInfo(entityId) uses the existing recon-filtered user-unit snapshot writer and returns synced experience when available.',scope:readOnly?'Legacy replay presentation only; native command-queue insertion and repeat hooks remain original.':'Native draw admission and read-only UI snapshots. Retail HUD initialization, update and shutdown instructions are unchanged; the Lua import order fixes startup. Optional simulation queue accessor rotates newly appended priority orders to the front with the retail active-task cancellation notification before rotation and controller wake for Alt factory and Space structure insertion; native Options, console and Lua keybinding entry points offer the Reforged editor with a scoped acknowledgement and original native fallback; existing native queue objects and flags are preserved using retail intrusive-reference assignment and temporary-reference cleanup. Finite factory identities are held in a separate bounded RW table; no command counts are modified. Only the retail completion call site suppresses their repeat; the shared predicate stays byte-identical. Actual native-world events are exposed synchronously to the Lua input router before retail area gestures. Capture-scoped motion and the retail focus-aware held-button query clear lost releases. Networking unchanged.',minimap:'RF:Mini resizes the displayed native g_map aperture and map_image, preserving their crop, and matches the backing WorldView; retail BE3E20 scene-scale edge overwrites remain disabled. Native camera, render, visibility and input retained.',acceptance:'Actual Windows battle loading, drawing and input still require an in-game test.'}}};
+ }
+ const PAYLOAD_HASH='e42adbcd737638e6a6bb4a893e9578fdb6d713ee8a77d1d1b2c21605c221a4c8';
+ module.exports={LAYOUT_HASH,REPLAY_ECONOMY_HASH,apply,ENTRY,HOOK,PAYLOAD_HASH,RANGE_ENTRY,RANGE_HASH,OVERLAY_ENTRY,OVERLAY_APPEND,OVERLAY_HASH,WINDOW_ENTRY,WINDOW_HASH};
+diff --git a/payload/resources/native/hud/reforged_ability_ranges.lua b/payload/resources/native/hud/reforged_ability_ranges.lua
+new file mode 100644
+--- /dev/null
++++ b/payload/resources/native/hud/reforged_ability_ranges.lua
+@@ -0,0 +1,53 @@
++local Data=import('/lua/ui/game/reforged_construction_costs.lua')
++local Effects=import('/lua/ui/game/reforged_research_effects.lua')
++local Info=import('/lua/ui/game/reforged_unitinfo.lua')
++local G=import('/lua/ui/game/reforged_geometry.lua')
++local names={RULEUCC_Jump='jump',Jump='jump',RULEUCC_Teleport='teleport',Teleport='teleport'}
++local specs={
++    jump={name='RULEUCC_Jump',short='Jump',field='JumpRange'},
++    teleport={name='RULEUCC_Teleport',short='Teleport',field='TeleportRange'},
++}
++local techIDs={}
++function Targeting(command,data)
++    if command=='order'and type(data)=='table'then return names[data.name]end
++end
++function Prepare(kind,sample)
++    local spec=specs[kind]
++    if not spec then return end
++    local definitions=(Data.MobilityRanges or{})[kind]or{}
++    local completed={}
++    for tech in pairs(definitions)do
++        local done
++        if type(GetResearchId)=='function'and type(IsCompletedResearch)=='function'then
++            if techIDs[tech]==nil then
++                local ok,id=pcall(GetResearchId,tech)
++                techIDs[tech]=ok and type(id)=='number'and id>=0 and id or false
++            end
++            if techIDs[tech]then
++                local ok,result=pcall(IsCompletedResearch,techIDs[tech])
++                if ok and type(result)=='boolean'then done=result end
++            end
++        end
++        if done==true or done==nil and sample and sample[tech]then completed[tech]=true end
++    end
++    return {spec=spec,definitions=definitions,completed=completed,radii={}}
++end
++function Radius(aim,unit)
++    local orders=GetUnitCommandData({unit})
++    if type(orders)~='table'then return end
++    local eligible=false
++    for _,order in pairs(orders)do
++        if order==aim.spec.name or order==aim.spec.short then eligible=true;break end
++    end
++    if not eligible then return end
++    local bp=Info.Blueprint(unit)
++    local id=bp and bp.BlueprintId
++    if not id then return end
++    if aim.radii[id]~=nil then return aim.radii[id]end
++    local base=(bp.General or{})[aim.spec.field]
++    if not G.Finite(base)or base<=0 then return end
++    local radius=Effects.Value(base,Effects.Active(aim.definitions,aim.completed,id),'range')
++    if not G.Finite(radius)or radius<=0 or radius>100000 then return end
++    aim.radii[id]=radius
++    return radius
++end
+diff --git a/payload/resources/native/hud/reforged_buildcost.lua b/payload/resources/native/hud/reforged_buildcost.lua
+--- a/payload/resources/native/hud/reforged_buildcost.lua
++++ b/payload/resources/native/hud/reforged_buildcost.lua
+@@ -2,54 +2,18 @@
+ -- focused army's existing research sample. The engine still charges the order.
+ local Data=import('/lua/ui/game/reforged_construction_costs.lua')
+ local Observer=import('/lua/ui/game/reforged_observer.lua')
+-local parsed={}
+-local function category(expression)
+-    if parsed[expression]==nil then
+-        local ok,filter=pcall(ParseEntityCategory,expression)
+-        parsed[expression]=ok and filter or false
+-    end
+-    return parsed[expression]
+-end
+-local function matches(expression,id)
+-    local filter=category(expression)
+-    return filter and EntityCategoryContains(filter,id)
+-end
+-local function multiplier(base,buffs,key)
+-    local add,mult,floor,ceil=0,1
+-    for _,buff in pairs(buffs)do
+-        local effect=buff[key]
+-        if effect then
+-            local count=buff.count
+-            add=add+(effect.Add or 0)*count
+-            mult=mult+(effect.Mult or 0)*count
+-            if effect.Floor then floor=math.min(floor or effect.Floor,effect.Floor)end
+-            if effect.Ceil then ceil=math.max(ceil or effect.Ceil,effect.Ceil)end
+-        end
+-    end
+-    local value=(base+add)*math.max(0,mult)
+-    if floor then value=math.max(floor,value)end
+-    if ceil then value=math.min(ceil,value)end
+-    return math.max(0,value)
+-end
++local Effects=import('/lua/ui/game/reforged_research_effects.lua')
+ local function factors(bp,target,completed)
+     local economy=bp.Economy or {}
+     local exclusion=economy.BuildModifiersExclusionCategory or bp.BuildModifiersExclusionCategory
+     if type(exclusion)=='table'then
+         for _,expression in pairs(exclusion)do
+-            if type(expression)=='string'and matches(expression,target)then return 1,1 end
++            if type(expression)=='string'and Effects.Matches(expression,target)then return 1,1 end
+         end
+     end
+-    local active={}
+-    for id in pairs(completed)do
+-        for _,buff in ipairs(Data.ConstructionCosts[id]or{})do
+-            if matches(buff.category,bp.BlueprintId)then
+-                local previous=active[buff.id]
+-                active[buff.id]={mass=buff.mass,energy=buff.energy,count=buff.stacks=='ALWAYS' and previous and previous.count+1 or 1}
+-            end
+-        end
+-    end
+-    return multiplier(economy.BuildMassCostMultiplier or 1,active,'mass'),
+-        multiplier(economy.BuildEnergyCostMultiplier or 1,active,'energy')
++    local active=Effects.Active(Data.ConstructionCosts,completed,bp.BlueprintId)
++    return Effects.Value(economy.BuildMassCostMultiplier or 1,active,'mass'),
++        Effects.Value(economy.BuildEnergyCostMultiplier or 1,active,'energy')
+ end
+ local function label(base,low,high)
+     if type(base)~='number'then return '?'end
+diff --git a/payload/resources/native/hud/reforged_controls.lua b/payload/resources/native/hud/reforged_controls.lua
+--- a/payload/resources/native/hud/reforged_controls.lua
++++ b/payload/resources/native/hud/reforged_controls.lua
+@@ -693,7 +693,7 @@
+             self.width,self.height=w,h
+         end
+         local module=import('/lua/ui/game/worldview.lua');local list=module.GetWorldViews()or{}
+-        local command=mode.GetCommandMode()
++        local command,commandData=mode.GetCommandMode()
+         if not readOnly then
+         if active then
+             if call(active.view.IsInputLocked,active.view)==true then Close('input locked')
+@@ -782,15 +782,18 @@
+             first=first and (call(first.GetEntityId,first)or first)
+             last=last and (call(last.GetEntityId,last)or last)
+             local preview=command=='build'or command=='order'
++            local abilityKind=not readOnly and command=='order'
++                and import('/lua/ui/game/reforged_ability_ranges.lua').Targeting(command,commandData)or nil
++            if not abilityKind then self.abilityRangeReport=nil end
+             local same=ringFrame and ringFrame.view==view and ringFrame.w==w and ringFrame.h==h
+                 and ringFrame.focus==focus and ringFrame.count==#units and ringFrame.first==first
+                 and ringFrame.last==last and ringFrame.hover==rangeHoverAllowed
+-                and ringFrame.preview==preview and ringFrame.pov==pov
++                and ringFrame.preview==preview and ringFrame.pov==pov and ringFrame.abilityKind==abilityKind
+             if not same then
+                 if ringFrame and ringFrame.view~=view then terrainHeights={};terrainHeightCount=0 end
+                 hideRings()
+                 ringFrame={view=view,w=w,h=h,focus=focus,count=#units,first=first,last=last,
+-                    hover=rangeHoverAllowed,preview=preview,pov=pov}
++                    hover=rangeHoverAllowed,preview=preview,pov=pov,abilityKind=abilityKind}
+             end
+             local frame=ringFrame
+             local elapsed=now and frame.time and now-frame.time
+@@ -800,7 +803,15 @@
+             if due then
+                 frame.time,frame.number=now,rangeFrameNumber
+                 local hover=#units==0 and rangeHoverAllowed and call(GetRolloverInfo)
+-                local rings,coverage=fieldVisuals:Rings(units,hover,rangeHoverAllowed,preview,pov)
++                local rings,coverage=fieldVisuals:Rings(units,hover,rangeHoverAllowed,preview,pov,abilityKind)
++                if abilityKind then
++                    local report=abilityKind..'|rings='..tostring(coverage.abilityCount or 0)
++                        ..'|radius='..tostring(coverage.abilityRadius or 0)
++                    if report~=self.abilityRangeReport then
++                        self.abilityRangeReport=report
++                        call(LOG,'S2R_ABILITY_RANGE|'..report)
++                    end
++                end
+                 if fieldVisuals.DrawAbilityFill then fieldVisuals:DrawAbilityFill(rings)end
+                 if #rings==0 then
+                     if frame.mesh then hideRings(true);frame.mesh=nil;frame.geometry=nil end
+diff --git a/payload/resources/native/hud/reforged_hud.lua b/payload/resources/native/hud/reforged_hud.lua
+--- a/payload/resources/native/hud/reforged_hud.lua
++++ b/payload/resources/native/hud/reforged_hud.lua
+@@ -16,7 +16,7 @@
+ local Perf=import('/lua/ui/game/reforged_performance.lua')
+ local converterOK,Converters=pcall(import,'/lua/ui/game/reforged_converterui.lua')
+ local active = false
+-local version = '0.37.7'
++local version = '0.37.8'
+ local researchColor = 'ffd99412'
+ local rootPath = '/textures/ui/common/pc/ingame/hud/'
+ local palettes = {
+diff --git a/payload/resources/native/hud/reforged_ranges.lua b/payload/resources/native/hud/reforged_ranges.lua
+--- a/payload/resources/native/hud/reforged_ranges.lua
++++ b/payload/resources/native/hud/reforged_ranges.lua
+@@ -1,6 +1,7 @@
+ -- World-space presentation decals. No orders, simulation state or hidden intel.
+ local Info=import('/lua/ui/game/reforged_unitinfo.lua')
+ local G=import('/lua/ui/game/reforged_geometry.lua')
++local function abilityModule()return import('/lua/ui/game/reforged_ability_ranges.lua')end
+ local Decal=import('/lua/user/UserDecal.lua').UserDecal
+ local root='/textures/ui/common/pc/ingame/hud/'
+ local function safe(f,...)local ok,v=pcall(f,...)if ok then return v end end
+@@ -30,7 +31,7 @@
+     local ok,ready,count,master=pcall(GetRolloverInfo,'RF:Overlays')
+     if not ok or ready~=true or type(master)~='boolean'or not G.Finite(count)or count<0 or count>64 or count~=math.floor(count)then return end
+     local result={}
+-    local kinds={[0]='overlay',[1]='weapon',[2]='radar',[3]='sonar',[4]='omni',[5]='ability'}
++    local kinds={[0]='overlay',[1]='weapon',[2]='radar',[3]='sonar',[4]='omni'}
+     for i=1,count do
+         local success,valid,x,z,minimum,radius,r,g,b,a,kind=pcall(GetRolloverInfo,'RF:Overlay',tostring(i))
+         if not success or valid~=true then return end
+@@ -84,10 +85,8 @@
+         ClearRings=function()hide(terrainRings);hideAbilityFills()end,
+         Reset=function()motion={};motionArmy=nil;coverageSeeds=nil;coverageKey=nil end,
+         Destroy=function()retire(fields);retire(ranges);retire(terrainRings);retire(abilityFills);motion={}end,
+-        -- Low-opacity ground decals show the complete ability area. The native
+-        -- record owns both origin and radius; mouse motion never recentres it.
+-        -- Inner exclusion zones stay outline-only rather than filling illegal
+-        -- terrain. Jump/Teleport discs normally have a native minimum of zero.
++        -- Low-opacity ground decals stay centered on the selected unit
++        -- while the cursor moves. The engine still validates destinations.
+         DrawAbilityFill=function(self,list)
+             local discs={}
+             for _,r in ipairs(list)do
+@@ -165,7 +164,7 @@
+             end
+             for id,d in pairs(ranges)do if not used[id]then d:Destroy();ranges[id]=nil end end
+         end,
+-        Rings=function(self,units,hovered,hoverAllowed,preview,playerView)
++        Rings=function(self,units,hovered,hoverAllowed,preview,playerView,abilityKind)
+             local readStart=Perf.Begin and safe(Perf.Begin)
+             local result={};local now=safe(GetGameTimeSeconds)
+             local replay=safe(ReforgedReplaySnapshot)
+@@ -242,6 +241,25 @@
+                     end
+                 end
+             end
++            if abilityKind and not inspecting and type(army)=='number'and army>0 then
++                local sample=current and snapshot.armies and snapshot.armies[army]
++                local ability=abilityModule()
++                local aim=ability.Prepare(abilityKind,sample and sample.research)
++                local count=0
++                for _,r in ipairs(sources)do
++                    if count>=64 then break end
++                    if r.selected and safe(r.unit.GetArmy,r.unit)==army then
++                        local radius=ability.Radius(aim,r.unit)
++                        if radius then
++                            result[#result+1]={kind='ability',radius=radius,minimum=0,center=r.position,
++                                key=r.id..':'..abilityKind}
++                            count=count+1
++                            coverage.abilityRadius=coverage.abilityRadius or radius
++                        end
++                    end
++                end
++                coverage.abilityCount=count
++            end
+             -- Native intel and replay focus records may repeat selected rings.
+             -- Index this call's current records once; retain the exact old
+             -- distance/radius predicates and append order, without stale data.
+@@ -299,18 +317,11 @@
+                     coverage.masterEnabled=master
+                     for index,r in ipairs(overlays)do
+                         local intel=r.kind=='radar'or r.kind=='sonar'
+-                        -- Native Jump/Teleport targeting can bypass Lua commandmode.
+-                        -- The engine emits this type only while that preview is active;
+-                        -- keep its live centre/radius rather than guessing from a BP.
+-                        if r.kind=='ability' or intel or preview and r.kind~='omni'then
++                        if intel or preview and r.kind~='omni'then
+                             r.key='native:'..r.kind..':'..index
+                             r.selected=intel
+                             if intel then nativeIntel[r.kind]=true end
+                             append(r)
+-                            if r.kind=='ability'and r.minimum>0 and r.minimum<r.radius then
+-                                append({kind='ability',radius=r.minimum,color=r.color,center=r.center,
+-                                    key=r.key..':minimum'})
+-                            end
+                         end
+                     end
+                 end
+diff --git a/payload/resources/native/hud/reforged_research_effects.lua b/payload/resources/native/hud/reforged_research_effects.lua
+new file mode 100644
+--- /dev/null
++++ b/payload/resources/native/hud/reforged_research_effects.lua
+@@ -0,0 +1,39 @@
++-- Apply the retail research buff calculation to UI previews.
++local parsed={}
++function Matches(expression,unitID)
++    if parsed[expression]==nil then
++        local ok,filter=pcall(ParseEntityCategory,expression)
++        parsed[expression]=ok and filter or false
++    end
++    local filter=parsed[expression]
++    return filter and EntityCategoryContains(filter,unitID)
++end
++function Active(definitions,completed,unitID)
++    local active={}
++    for id in pairs(completed)do
++        for _,buff in ipairs(definitions[id]or{})do
++            if Matches(buff.category,unitID)then
++                local previous=active[buff.id]
++                active[buff.id]={definition=buff,count=buff.stacks=='ALWAYS' and previous and previous.count+1 or 1}
++            end
++        end
++    end
++    return active
++end
++function Value(base,buffs,key)
++    local add,mult,floor,ceil=0,1
++    for _,buff in pairs(buffs)do
++        local effect=buff.definition[key]
++        if effect then
++            local count=buff.count
++            add=add+(effect.Add or 0)*count
++            mult=mult+(effect.Mult or 0)*count
++            if effect.Floor then floor=math.min(floor or effect.Floor,effect.Floor)end
++            if effect.Ceil then ceil=math.max(ceil or effect.Ceil,effect.Ceil)end
++        end
++    end
++    local value=(base+add)*math.max(0,mult)
++    if floor then value=math.max(floor,value)end
++    if ceil then value=math.min(ceil,value)end
++    return math.max(0,value)
++end
+diff --git a/payload/resources/native/hud/replay-presentation.cjs b/payload/resources/native/hud/replay-presentation.cjs
+--- a/payload/resources/native/hud/replay-presentation.cjs
++++ b/payload/resources/native/hud/replay-presentation.cjs
+@@ -37,6 +37,6 @@
+  assert.equal(new Set(scripts.map(norm)).size,scripts.length,'Duplicate replay script path');
+  // Every selected non-instrumented simulation/resource entry remains exact.
+  for(const source of selectedScripts){if(audit.some(a=>a.path===norm(source)))continue;const same=scripts.find(e=>norm(e)===norm(source));assert.ok(same&&same.data.equals(source.data),'Selected replay content changed: '+source.name);}
+- return {...current,scripts,overrides,manifest:{...current.manifest,mode:'replay-presentation-0377',simulationRevision:revision,originalSimulation:legacy,stockOrders,...(stockOrders?{stockControlRevision:selected.manifest.stockControlRevision,originalBalance:true}:{}),...(selected.manifest.gameplay?{gameplay:selected.manifest.gameplay}:{}),gameplayOverrides:false,telemetryOnly:true,delegatedClasses:audit,scope:'Current replay controls/minimap with selected simulation rules preserved; replay-only statistics wrappers write private counters and UI Sync, never orders, economy, blueprints, RNG or AI behavior.'}};
++ return {...current,scripts,overrides,manifest:{...current.manifest,mode:'replay-presentation-0378',simulationRevision:revision,originalSimulation:legacy,stockOrders,...(stockOrders?{stockControlRevision:selected.manifest.stockControlRevision,originalBalance:true}:{}),...(selected.manifest.gameplay?{gameplay:selected.manifest.gameplay}:{}),gameplayOverrides:false,telemetryOnly:true,delegatedClasses:audit,scope:'Current replay controls/minimap with selected simulation rules preserved; replay-only statistics wrappers write private counters and UI Sync, never orders, economy, blueprints, RNG or AI behavior.'}};
+ }
+ module.exports={compose,isUI};
+diff --git a/payload/resources/native/hud/research.cjs b/payload/resources/native/hud/research.cjs
+--- a/payload/resources/native/hud/research.cjs
++++ b/payload/resources/native/hud/research.cjs
+@@ -73,14 +73,17 @@
+  for(const [id,patch]of Object.entries(p.buffs))if(!seen.has(id))buffs.push({Name:id,DisplayName:id,BuffType:'SC2',Stacks:'ALWAYS',Duration:-1,...(patch.weaponCategory?{WeaponCategory:patch.weaponCategory}:{}),Affects:clone(patch.effects)});
+  return buffs;
+ }
+-function constructionCosts(definitions,buffs){
+- const effects=new Map(buffs.filter(b=>b.Affects?.BuildCostMass||b.Affects?.BuildCostEnergy).map(b=>[b.Name,b]));
++function researchEffects(definitions,buffs,fields){
++ const effects=new Map(buffs.filter(b=>Object.keys(fields).some(key=>b.Affects?.[key])).map(b=>[b.Name,b]));
+  const result={};
+  for(const [id,d] of Object.entries(definitions)){
+   for(const mod of [{CATS:d.CATS,Buffs:d.Buffs},...(Array.isArray(d.Modifiers)?d.Modifiers:[])]){
+    for(const buffId of Array.isArray(mod.Buffs)?mod.Buffs:[]){
+     const buff=effects.get(buffId);
+-    if(buff)(result[id]??=[]).push({category:mod.CATS||'ALLUNITS',id:buffId,stacks:buff.Stacks,mass:buff.Affects.BuildCostMass,energy:buff.Affects.BuildCostEnergy});
++    if(buff){
++     const affected=Object.fromEntries(Object.entries(fields).map(([key,name])=>[name,buff.Affects[key]]));
++     (result[id]??=[]).push({category:mod.CATS||'ALLUNITS',id:buffId,stacks:buff.Stacks,...affected});
++    }
+    }
+   }
+  }
+@@ -160,10 +163,15 @@
+   }
+   const buffEntry=lookup.get(prefix+'sim/buffs/researchbuffdefinitions.lua');
+   assert.ok(buffEntry,'Missing construction cost data '+prefix);
+-  const costs=constructionCosts(defs,buffData(readData(buffEntry.data),patch));
++  const buffs=buffData(readData(buffEntry.data),patch);
++  const costs=researchEffects(defs,buffs,{BuildCostMass:'mass',BuildCostEnergy:'energy'});
++  const mobility={
++   jump:researchEffects(defs,buffs,{JumpRange:'range'}),
++   teleport:researchEffects(defs,buffs,{TeleportDistance:'range'})
++  };
+   return [
+    {name:prefix+'ui/game/reforged_research_data.lua',data:Buffer.from('Trees='+literal(trees)+'\n')},
+-   {name:prefix+'ui/game/reforged_construction_costs.lua',data:Buffer.from('ConstructionCosts='+literal(costs)+'\n')}
++   {name:prefix+'ui/game/reforged_construction_costs.lua',data:Buffer.from('ConstructionCosts='+literal(costs)+'\nMobilityRanges='+literal(mobility)+'\n')}
+   ];
+  });
+ }
