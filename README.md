@@ -29,6 +29,9 @@ local combat and recovery, active research planning, and versioned replay rules.
 The [0.38.4 source update](releases/0.38.4/README.md) fixes the AI catalog
 startup crash and adds a regression without Lua string method support.
 
+The [0.38.5 source update](releases/0.38.5/README.md) repairs deferred opening
+routes and checks paid factory construction and unit production across presets.
+
 The playable client requires the separately distributed Reforged installer,
 its native integration resources, and a supported Steam installation of
 Supreme Commander 2. The installer, native gameplay payloads, game-derived
