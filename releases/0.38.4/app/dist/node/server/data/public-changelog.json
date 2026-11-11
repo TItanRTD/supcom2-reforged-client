@@ -1,0 +1,688 @@
+[
+  {
+    "version": "0.38.4",
+    "date": "2026-11-10",
+    "title": "AI startup crash fix",
+    "body": "Fixed a crash while loading the AI unit catalog. The new AI code now uses the string functions supported by the game, including factory output checks, research categories and ability selection."
+  },
+  {
+    "version": "0.38.3",
+    "date": "2026-11-11",
+    "title": "Reforger AI update",
+    "body": "The AI reacts to nearby fights before spending time on base management. Damaged heavy units stay back to recover, and ground tanks no longer count as protection against bombers. Research follows the current tree and only counts as spent once it unlocks. The AI can use legal foreign factories, plan compatible experimental production and attempt paid teleport or jump moves with nearby units. The Reforged Balance startup fix is included."
+  },
+  {
+    "version": "0.38.2",
+    "date": "2026-11-11",
+    "title": "Reforged Balance startup fix",
+    "body": "Fixed a crash when loading Reforged Balance. The Orion and Javelin blueprint hooks now load correctly during game startup and replay playback."
+  },
+  {
+    "version": "0.38.1",
+    "date": "2026-11-11",
+    "title": "Game launch fix",
+    "body": "Fixed an archive size limit that stopped Reforged Balance games from launching. Linux now has a single-file installer."
+  },
+  {
+    "version": "0.38.0",
+    "date": "2026-11-10",
+    "title": "Linux preview",
+    "body": "Reforged now has a Linux client. It finds your Steam installation and launches Reforged Balance skirmishes and replays through Proton. Ranked matchmaking still runs through the Windows client."
+  },
+  {
+    "version": "0.37.21",
+    "date": "2026-11-10",
+    "title": "Javelin airframe update",
+    "body": "The Javelin has a new delta-wing airframe. Its bomb bay opens before dropping a single charge, and the impact sends a ring across the ground."
+  },
+  {
+    "version": "0.37.20",
+    "date": "2026-11-10",
+    "title": "Readable research in replays and spectating",
+    "body": "Tab opens the readable research tree in replays and spectator mode. Research popups now show Training ranks the same way the tree does."
+  },
+  {
+    "version": "0.37.19",
+    "date": "2026-11-10",
+    "title": "Replay scoreboard and research popups",
+    "body": "The replay and spectator scoreboard sits flush with the bottom of the screen. Research popups are centered above the scoreboard, and the replay controls move aside when they would overlap it."
+  },
+  {
+    "version": "0.37.18",
+    "date": "2026-11-10",
+    "title": "Orion visual update",
+    "body": "Orion has a rebuilt model, a moving shutter, and new beam, impact, and exhaust effects. Its beam lasts three seconds with the same damage budget per burst."
+  },
+  {
+    "version": "0.37.17",
+    "date": "2026-11-10",
+    "title": "Jerrico splash damage",
+    "body": "Jerrico shells now deal light splash damage to nearby enemies. Each direct hit still deals 700 damage. Catapult rocket models are 15% smaller."
+  },
+  {
+    "version": "0.37.16",
+    "date": "2026-11-10",
+    "title": "Heavy defense damage and construction",
+    "body": "The new structures use their original build animations again, and the scaffold packs up when construction finishes. Catapult rockets leave thicker smoke and do splash damage. The Jerrico can take out a standard tank in three hits, and the Orion\u2019s beam hits harder. Heavy point defenses now cost 420 to 490 mass."
+  },
+  {
+    "version": "0.37.15",
+    "date": "2026-11-10",
+    "title": "Heavy defenses and community maps",
+    "body": "Catapult rockets are bigger, fly on a lower arc, and spread out a bit when they land. There\u2019s a longer pause between salvos. Heavy point defenses all reach farther, with Cybran out in front, then UEF, then Illuminate. The new defenses and reactors have scaffolding sized to fit, and community maps install under their published filenames."
+  },
+  {
+    "version": "0.37.14",
+    "date": "2026-11-10",
+    "title": "Catapult and Hyper Rail Reactor",
+    "body": "Catapult now fires heavy rockets on a high arc, with a thicker smoke trail and a heavier impact. The Hyper Rail Reactor\u2019s Vent command is disabled while we investigate a crash on selection."
+  },
+  {
+    "version": "0.37.13",
+    "date": "2026-11-10",
+    "title": "Build icon direction",
+    "body": "The 17 new Reforged Balance build icons now match the direction of the existing set."
+  },
+  {
+    "version": "0.37.12",
+    "date": "2026-11-10",
+    "title": "Reforged Balance unit fixes",
+    "body": "The new build icons use faction colors in the Reforged HUD and stay white in Classic. Strategic zoom icons use the same texture format as the stock icons. Jerrico fires its three barrels half a second apart, and Catapult has a new missile trail. Ahwassa II makes forward bombing passes, construction effects scale with the new structures, and Jerrico and the Fusion Reactor have revised team colors."
+  },
+  {
+    "version": "0.37.11",
+    "date": "2026-11-10",
+    "title": "Reforged Balance unit fixes",
+    "body": "Jerrico fires three shells in quick succession before reloading. Orion and Catapult use faction-specific weapon effects. Ahwassa II is larger, flies like a bomber, and builds at the Experimental Gantry. The new structures are bigger, Cybran structures rise out of the ground, and land scouts got movement and visual fixes."
+  },
+  {
+    "version": "0.37.10",
+    "title": "Research popups while watching",
+    "body": "Research completions show up above the replay controls and while spectating. The cards stay tied to new unlocks, so skipping ahead in a replay clears old popups. This release also comes with a full Windows installer.",
+    "date": "2026-11-10"
+  },
+  {
+    "version": "0.37.9",
+    "title": "17 units for Reforged Balance",
+    "body": "Reforged Balance has 17 new units, all available from the start of a match.",
+    "date": "2026-11-09"
+  },
+  {
+    "version": "0.37.8",
+    "title": "Jump Jet and Teleport range",
+    "body": "Aim Jump Jet or Teleport to see how far the selected unit can go. The ring stays centered on the unit and includes any distance upgrades you\u2019ve researched. Works in both HUDs.",
+    "date": "2026-11-09"
+  },
+  {
+    "version": "0.37.7",
+    "title": "Build prices, Caster badge and leaderboard",
+    "body": "Build prices update when you finish the relevant research. Classic clears unused build slots as you switch tabs, and factories stick to Units and Factory Add-ons. The Caster badge is available, and the leaderboard has a canyon banner and filters that update as you change them. This was the first pass at Jump Jet and Teleport range rings.",
+    "date": "2026-11-09"
+  },
+  {
+    "version": "0.37.6",
+    "title": "Build menus and replay scoreboards",
+    "body": "The Illuminate Tactical Missile Launcher appears on the first Combat page once unlocked, alongside the Anti-Air Tower and Light Point Defense. Classic factories have Units and Factory Add-ons tabs. Replays save available match-start Forge Ratings and badges. Reforged queue icons use faction colors, while Classic uses white.",
+    "date": "2026-11-09"
+  },
+  {
+    "version": "0.37.5",
+    "title": "HUD startup fix",
+    "body": "Rolled back a queue rendering change that caused trouble at startup. Factory queues temporarily used neutral icons in both HUDs.",
+    "date": "2026-11-09"
+  },
+  {
+    "version": "0.37.4",
+    "title": "Drag-move and website sign-in",
+    "body": "Draw formations in either HUD. In Classic, hold Ctrl to clump units. You can stay signed in on the website and desktop at the same time, using your username or verified email. Account creation has its own page, and Discord, Patreon and Ko-fi links are in both footers.",
+    "date": "2026-11-08"
+  },
+  {
+    "version": "0.37.3",
+    "title": "Reforged controls with stock balance",
+    "body": "Vanilla + Infinite War Battle Pack picked up Reforged movement, attack-move, area reclaim and repair, and priority queue controls. The original units, research, AI and mass conversion still play as before.",
+    "date": "2026-11-08"
+  },
+  {
+    "version": "0.37.2",
+    "title": "Classic controls and the Vanilla Plus name",
+    "body": "Classic got white build and selection icons, its original drag-to-form movement and Ctrl-to-clump. Engineers and commanders can work along an attack-move route. Vanilla Plus became the name for the enhanced ruleset.",
+    "date": "2026-11-08"
+  },
+  {
+    "version": "0.37.1",
+    "title": "Stock lobby startup and client buttons",
+    "body": "Fixed a crash when opening an Infinite War Battle Pack lobby. The Discord setup button opens a visible console and reports progress, and the Support button takes you to the website.",
+    "date": "2026-11-08"
+  },
+  {
+    "version": "0.37.0",
+    "title": "Three ways to play",
+    "body": "Custom games can choose Vanilla Plus, the original game with Infinite War Battle Pack, or Reforged Balance. Admins can publish research and balance patches separately and set the official ladder patch. Replays remember which patch the match used."
+  },
+  {
+    "version": "0.36.19",
+    "title": "Resize individual HUD panels",
+    "body": "Resize and position panels separately in both HUDs. Replay controls moved to the bottom center, and the Support Reforged page added Patreon and Ko-fi options."
+  },
+  {
+    "version": "0.36.18",
+    "title": "Classic HUD cleanup",
+    "body": "Build costs now sit clear of the queue, the unit cap appears once, and conversion has its own background. The Classic minimap sits at the right edge with idle units below it, and the Options button has a background."
+  },
+  {
+    "version": "0.36.17",
+    "title": "Display settings and research progress",
+    "body": "Fixed a Display settings bug that could trap mouse input. The Classic research progress bar moved below the label and total."
+  },
+  {
+    "version": "0.36.16",
+    "title": "HUD editor and Classic hotkeys",
+    "body": "Preview, scale and move HUD panels from Preferences. Classic got its own editable hotkeys and horizontal build tabs. Both HUDs show research progress, and Ctrl+Shift+right-click works on queued orders again."
+  },
+  {
+    "version": "0.36.15",
+    "title": "Classic Reforged HUD",
+    "body": "Switch between Classic and Reforged in game. The client remembers the HUD choice per game profile."
+  },
+  {
+    "version": "0.36.14",
+    "title": "Faster range overlays",
+    "body": "Reduced repeated range calculations when selecting large armies, especially when units share overlapping intel coverage."
+  },
+  {
+    "version": "0.36.13",
+    "title": "Large selections",
+    "body": "Overlapping range rings take less work to draw. Their outlines still connect and keep gaps where coverage breaks. Added timing logs for selection slowdowns."
+  },
+  {
+    "version": "0.36.12",
+    "title": "Bigger scoreboard text",
+    "body": "Player names, column headings, Forge Ratings and economy numbers are easier to read. Live economy stats are visible for you and your teammates."
+  },
+  {
+    "version": "0.36.11",
+    "title": "Economy totals and research in replays",
+    "body": "The scoreboard shows stored Mass, Energy and Research with income next to each total. Spectators and replay viewers can see every army\u2019s available totals. This build also added research completion tracking for observer popups."
+  },
+  {
+    "version": "0.36.10",
+    "title": "Missing HUD fix",
+    "body": "Fixed the HUD disappearing after 0.36.9. Older replays use the repaired HUD with the simulation they were recorded on."
+  },
+  {
+    "version": "0.36.9",
+    "title": "HUD performance and selection feedback",
+    "body": "Cut down on repeated work during large selections and range updates. Added new selection art and a brief highlight when you select units."
+  },
+  {
+    "version": "0.36.8",
+    "title": "Ping startup crash",
+    "body": "Fixed a crash in the game\u2019s ping setup. Launch diagnostics once again include the full recorded launch history."
+  },
+  {
+    "version": "0.36.7",
+    "title": "Launch recovery retries",
+    "body": "Each recovery attempt gets a fresh game folder. Once a repaired copy launches successfully, the client uses it the next time."
+  },
+  {
+    "version": "0.36.6",
+    "title": "Recovering from old interfaces",
+    "body": "Fixed launch recovery for copies that were last used with custom research or a replay. The launcher shows more detail about the step it\u2019s checking."
+  },
+  {
+    "version": "0.36.5",
+    "title": "Interface check timeouts",
+    "body": "Fixed launches timing out at the interface check and made progress visible while the client verifies the game files."
+  },
+  {
+    "version": "0.36.4",
+    "title": "Guest launches and unit animations",
+    "body": "Restored guest launch preparation, cleaned up the ladder lobby, and fixed an error when inspecting units without veterancy data. Reduced replay HUD work and added unit animations."
+  },
+  {
+    "version": "0.36.3",
+    "title": "Ranked guest readiness",
+    "body": "Ranked guests can ready up again. The lobby got wider Player columns and fixes for stray badge tooltips and the map backdrop."
+  },
+  {
+    "version": "0.36.2",
+    "title": "Research cards and battle feedback",
+    "body": "Added compact research cards with the upgrade icon, branch and affected units. Construction, veterancy, shields, teleport, jump jets and capture got new feedback. Restored signed client updates for older playtest builds."
+  },
+  {
+    "version": "0.36.1",
+    "title": "Badge tooltips and update status",
+    "body": "Badge tooltips clear when you move away. The client shows its installed version and tells you when sign-in or an unpublished update is the reason you can\u2019t update."
+  },
+  {
+    "version": "0.36.0",
+    "title": "Orders, hotkeys and earned badges",
+    "body": "Orders got path chevrons and waypoint markers. Profiles show earned badges, with playtime from ladder, custom, unranked and co-op matches. Reclaim, Repair and Repeat Build moved to E, R and T."
+  },
+  {
+    "version": "0.35.5",
+    "title": "Lobby badges and map uploads",
+    "body": "Badges sit between the avatar and player name. Map checks run in the background and flag duplicate uploads. The playtest application was shortened."
+  },
+  {
+    "version": "0.35.4",
+    "title": "Intel coverage and replay maps",
+    "body": "Overlapping intel rings take less work to draw, weapon rings stay thin up close, and replay minimap terrain is back. Right-click attacks work again on eligible targets."
+  },
+  {
+    "version": "0.35.3",
+    "title": "Combined intel rings and DLC units",
+    "body": "Selected units share an outline where their radar, sonar or omni ranges overlap. The website unit list picked up missing DLC units, including the Monkeylord."
+  },
+  {
+    "version": "0.35.2",
+    "title": "Battle startup crash",
+    "body": "Fixed a crash while loading weapon changes and strategic icons. The same fix applies when opening affected 0.35.0 and 0.35.1 replays."
+  },
+  {
+    "version": "0.35.1",
+    "title": "AI expansion and experimental units",
+    "body": "AI engineers look for reachable mass and pull back from threats. UEF and Cybran AIs can plan gantries and pay for unlocked Fatboys and Megaliths."
+  },
+  {
+    "version": "0.35.0",
+    "title": "Range rings and balance changes",
+    "body": "Thin terrain-following rings returned. The Titan\u2019s main cannon fires faster for about 5% more DPS, and the Illuminate Tactical Missile Launcher range dropped from 225 to 200. The Intellitron joined the unit catalogue."
+  },
+  {
+    "version": "0.34.3",
+    "title": "Range rings and observer research",
+    "body": "Overlapping weapon coverage joins into one outline. Tab opens read-only research when watching a match, and the tree shows completed upgrades and the Afterburn icon."
+  },
+  {
+    "version": "0.34.2",
+    "title": "Replay selection and research display",
+    "body": "Replay and spectator drag boxes clear properly on deselection. The research tree clears stale icons when you switch branches and marks completed upgrades."
+  },
+  {
+    "version": "0.34.1",
+    "title": "Player View and team comparison",
+    "body": "Switching Player View clears active inspection gestures and keeps team comparison visible. The research viewer also got Training I\u2013V badges."
+  },
+  {
+    "version": "0.34.0",
+    "title": "Spectator tools",
+    "body": "Inspect units and open read-only faction research trees during replays and live spectating. Range outlines follow terrain and combine coverage for selected units."
+  },
+  {
+    "version": "0.33.7",
+    "title": "Attack-move and formation shortcuts",
+    "body": "Alt+right-click issues attack-move and Ctrl+right-click moves units in formation. Orders play their sound once, and B switches between factory units and add-ons."
+  },
+  {
+    "version": "0.33.6",
+    "title": "Cobra and Intellitron from match start",
+    "body": "Both Cybran units became available from the start of a match. The Intellitron\u2019s model and selection marker shrank to scout size."
+  },
+  {
+    "version": "0.33.5",
+    "title": "Replay minimap and TMD art",
+    "body": "Fixed replay minimap textures and added a Reforged End Replay prompt. Tactical Missile Defense got model-based icons and faction construction scaffolds."
+  },
+  {
+    "version": "0.33.4",
+    "title": "Research relaunch and Cybran Light PD",
+    "body": "Fixed a launch failure after editing research. Cybran Light PD now rises straight out of the ground during construction."
+  },
+  {
+    "version": "0.33.3",
+    "title": "TMD startup crash",
+    "body": "Fixed a crash while loading Tactical Missile Defense blueprints. Windows installers moved to a consistent filename."
+  },
+  {
+    "version": "0.33.2",
+    "title": "Tactical Missile Defense",
+    "body": "All three factions got a Tactical Missile Defense structure. Formations show each unit\u2019s destination and play a move sound, and the AI got a fix for stalling after research."
+  },
+  {
+    "version": "0.33.1",
+    "title": "Lobby connections and firewall checks",
+    "body": "Cleaned up the connection panel after you create a lobby. The client remembers firewall permission checks and gives clearer diagnostics."
+  },
+  {
+    "version": "0.33.0",
+    "title": "Adaptive AI",
+    "body": "Custom games got adaptive opponents with improved expansion, scouting, production and team coordination."
+  },
+  {
+    "version": "0.32.9",
+    "title": "New unit models and icons",
+    "body": "Updated the Caliper model and the Swab, Caliper, Conduit and Centurion icons. The Conduit got hover effects, and the Swab and Caliper animations were adjusted for the game renderer."
+  },
+  {
+    "version": "0.32.8",
+    "title": "Centurion unlock",
+    "body": "Researching the Centurion also unlocks its UEF Land Experimental Gantry. The research tooltip explains the dependency."
+  },
+  {
+    "version": "0.32.7",
+    "title": "Research editor unit list",
+    "body": "The research editor can assign unlocks for all added units, including the three reclamation bots. It keeps the original faction research details and existing drafts."
+  },
+  {
+    "version": "0.32.6",
+    "title": "Replay terrain and Centurion",
+    "body": "Replay minimaps use the installed map preview for terrain. Ending a replay goes through the original score transition. This build also added the Centurion."
+  },
+  {
+    "version": "0.32.5",
+    "title": "Converter timing and replay terrain",
+    "body": "Fixed a simulation timing error in passive converters. Replay minimaps can load the actual terrain image, including images shared between maps."
+  },
+  {
+    "version": "0.32.4",
+    "title": "Converter status and replay minimaps",
+    "body": "Converters register when construction finishes, and the HUD shows their energy use in red. Replay minimaps load terrain through the game\u2019s texture paths."
+  },
+  {
+    "version": "0.32.3",
+    "title": "HUD fit and game executable",
+    "body": "Restored a compact HUD and aligned the native controls with the live window. Hosting, joining and replays share one executable in each managed game copy."
+  },
+  {
+    "version": "0.32.2",
+    "title": "Right-click targets and structure income",
+    "body": "Right-click targets enemy units and unidentified radar contacts as expected. Structure details show Mass, Energy and Research production, including in replays."
+  },
+  {
+    "version": "0.32.1",
+    "title": "Website and playtest installer",
+    "body": "The Windows installer now includes the website and closed playtest changes, with the existing server upgrade flow."
+  },
+  {
+    "version": "0.32.0",
+    "title": "Public Reforged website",
+    "body": "Launched the homepage with current games, changelog and account sign-in, plus a playtest download flow."
+  },
+  {
+    "version": "0.31.3",
+    "title": "AI late-game stall",
+    "body": "Fixed an error where a destroyed enemy unit could stall both AIs."
+  },
+  {
+    "version": "0.31.2",
+    "title": "Replay pause controls",
+    "body": "Added yellow Play and Pause icons, with the button updating immediately to reflect the replay state."
+  },
+  {
+    "version": "0.31.1",
+    "title": "Custom lobby player controls",
+    "body": "Restored Team, Color and Faction buttons on all eight custom lobby slots."
+  },
+  {
+    "version": "0.31.0",
+    "title": "AI opening and construction fixes",
+    "body": "Fixed early-game stalls caused by overlapping build placements. Improved build-range handling, expansion and idle builder recovery."
+  },
+  {
+    "version": "0.30.6",
+    "title": "Lobby scaling",
+    "body": "Lobby sizing is independent of the battle HUD scale. The commander table and Income column keep their wider layout."
+  },
+  {
+    "version": "0.30.5",
+    "title": "AI startup and lobby columns",
+    "body": "Fixed a timing error that blocked AI startup. Lobby names have more room, and Income has its own column beside Ping."
+  },
+  {
+    "version": "0.30.4",
+    "title": "Custom lobby startup crash",
+    "body": "Fixed the game loading error in the AI and lobby options while keeping the existing options and per-slot income settings."
+  },
+  {
+    "version": "0.30.3",
+    "title": "Lobby diagnostic build",
+    "body": "Released the diagnostic installer with consistent version labels and excluded temporary native files from setup."
+  },
+  {
+    "version": "0.30.2",
+    "title": "Lobby crash diagnostics",
+    "body": "Added Lua crash details to the game log to help trace the lobby startup issue."
+  },
+  {
+    "version": "0.30.1",
+    "title": "AI attack and reclaim decisions",
+    "body": "AIs stay on attack orders while they\u2019re making progress, prioritize reachable wreckfields and check visibility before sending engineers in."
+  },
+  {
+    "version": "0.30.0",
+    "title": "Four AI difficulties",
+    "body": "Custom games got Easy, Normal, Hard and Reforger AI presets. They scout, expand, reclaim and pay for units using the same economy rules as players."
+  },
+  {
+    "version": "0.27.33",
+    "title": "Ladder auto-start and spawns",
+    "body": "Fixed ladder countdowns and spawn synchronization for independent hosts. Commander and faction values have more room in the lobby."
+  },
+  {
+    "version": "0.27.32",
+    "title": "Ladder staging screen",
+    "body": "Added a map backdrop, player ratings, factions and a five-second countdown to the ladder lobby. Thin range outlines returned in game."
+  },
+  {
+    "version": "0.27.31",
+    "title": "Ladder Assassination and range rings",
+    "body": "Ladder games enforce Assassination. The HUD draws thin weapon, build, radar, sonar and omni ranges on terrain."
+  },
+  {
+    "version": "0.27.22",
+    "title": "Unit order capabilities",
+    "body": "Move, repair and reclaim check the capabilities each unit declares, including units that store several orders in one flag."
+  },
+  {
+    "version": "0.27.21",
+    "title": "Saved hotkeys and order input",
+    "body": "Fixed saved hotkey setup in the game. A hotkey error no longer interrupts right-click move, formations, repair or reclaim."
+  },
+  {
+    "version": "0.27.20",
+    "title": "Area order previews and hotkey entry points",
+    "body": "Area previews clear when you release the mouse. All three hotkey menu entry points open the Reforged editor."
+  },
+  {
+    "version": "0.27.19",
+    "title": "Hotkey setup during loading",
+    "body": "The hotkey editor opens while input is still initializing and retries binding setup without dropping saved keys."
+  },
+  {
+    "version": "0.27.18",
+    "title": "Exporting failed launches",
+    "body": "Early launch failures can be exported even when no game folder was prepared. The Replays page includes a diagnostics shortcut that works offline."
+  },
+  {
+    "version": "0.27.17",
+    "title": "Server migration and match listings",
+    "body": "Server migration waits for saves and uploads. Custom match listings use the final map and teams even when they change right before launch."
+  },
+  {
+    "version": "0.27.16",
+    "title": "Community map repository",
+    "body": "Signed-in users can upload SCD or ZIP map packs, add titles and credits, search the library and download original packages."
+  },
+  {
+    "version": "0.27.15",
+    "title": "Lobby map changes",
+    "body": "Changing the map in the game lobby updates the listing and preview in the desktop client."
+  },
+  {
+    "version": "0.27.14",
+    "title": "Open lobbies and games in progress",
+    "body": "Custom Games separates joinable lobbies from live matches. Running games show the map, starting players and an approximate timer."
+  },
+  {
+    "version": "0.27.13",
+    "title": "Co-op preview and research editing",
+    "body": "Added Coming Soon cards for Survival and Roguelike Survival. Research drafts can set starting units, import icons and edit prerequisite connections."
+  },
+  {
+    "version": "0.27.12",
+    "title": "Research workshop preview",
+    "body": "The Admin workshop added faction trees, editable draft nodes and shared bonuses, with search and undo. This preview saved drafts for later work."
+  },
+  {
+    "version": "0.27.11",
+    "title": "Legacy replay HUD",
+    "body": "Added a Reforged HUD for original-game replays that keeps the original simulation. HUD resizing works while playback is paused."
+  },
+  {
+    "version": "0.27.10",
+    "title": "Replay folders and local watching",
+    "body": "The client remembers the replay folder and lets you watch local replays from the sign-in screen."
+  },
+  {
+    "version": "0.27.9",
+    "title": "Move and area order cleanup",
+    "body": "Move and attack-move leave stationary and factory queues alone. Area repair and reclaim disarm after one order, or stay armed while holding Shift."
+  },
+  {
+    "version": "0.27.8",
+    "title": "Quick area drags",
+    "body": "Area repair and reclaim respond to quick drags. Right-clicking units still uses the game\u2019s normal context orders."
+  },
+  {
+    "version": "0.27.7",
+    "title": "Formation and area order input",
+    "body": "Added a drag threshold before formation markers appear. Area repair and reclaim can be armed directly from their hotkeys."
+  },
+  {
+    "version": "0.27.6",
+    "title": "Formation drag previews",
+    "body": "Hold and drag to preview curved or circular formations. Releasing or losing the input clears the preview."
+  },
+  {
+    "version": "0.27.5",
+    "title": "Accurate click-to-repair",
+    "body": "A single repair click uses the unit you clicked, including structures with large footprints. Area reclaim reads the mass actually left in visible wrecks."
+  },
+  {
+    "version": "0.27.4",
+    "title": "Native input crash",
+    "body": "Fixed the input crash introduced in 0.27.3."
+  },
+  {
+    "version": "0.27.3",
+    "title": "Order gestures and hotkey rows",
+    "body": "Fixed several move, repair and reclaim gesture issues and made the main Orders rows easier to load and display."
+  },
+  {
+    "version": "0.27.2",
+    "title": "Stop, Guard and fire mode",
+    "body": "S stops units, G guards, and G stops selected factories. Fire-mode cycling moved to E, and reclaim overlays show remaining mass."
+  },
+  {
+    "version": "0.27.0",
+    "title": "Grid hotkeys and priority queues",
+    "body": "Added contextual order hotkeys. Alt can insert a factory item after the active order, and Space can place a structure after the builder\u2019s current job."
+  },
+  {
+    "version": "0.26.6",
+    "title": "Server recovery and HUD text",
+    "body": "The sign-in screen shows the selected server and offers connection recovery. HUD text uses Arial Bold, and Sand joined the color palette."
+  },
+  {
+    "version": "0.26.5",
+    "title": "Kestrel paint and ratings",
+    "body": "Kestrel team paint keeps the model\u2019s surface detail. Forge Rating and Games Played headers align over their columns."
+  },
+  {
+    "version": "0.26.4",
+    "title": "Scout icons and build keys",
+    "body": "Kestrel and Falcion got new build icons and moved to X beside the engineer on Z. Their faction transports moved to C."
+  },
+  {
+    "version": "0.26.3",
+    "title": "Scout materials and lobby colors",
+    "body": "Corrected scout team colors and texture channels, enabled native glow, and restored rectangular lobby color swatches."
+  },
+  {
+    "version": "0.26.2",
+    "title": "Scout loading fix",
+    "body": "Fixed scout registration during blueprint loading and added per-stage logs for tracking future load errors."
+  },
+  {
+    "version": "0.26.1",
+    "title": "Game colors and launch diagnostics",
+    "body": "Fixed palette loading and added Windows application error details to game launch diagnostics when available."
+  },
+  {
+    "version": "0.25.2",
+    "title": "Replay HUD sizing",
+    "body": "Replay controls and text fit the actual window, and the toolbar stays clear of the scoreboard. Minimap initialization waits for the game to be ready."
+  },
+  {
+    "version": "0.25.1",
+    "title": "Party matchmaking and maps",
+    "body": "Parties queue only when they share an eligible map. Ongoing games remain listed if a guest closes the game."
+  },
+  {
+    "version": "0.25.0",
+    "title": "Eight-player networking and matchmaking",
+    "body": "Added eight-player independent networking, parties and map pools for 1v1 through 4v4 and 4-, 6- and 8-player FFA. Ladder and custom ratings are tracked separately."
+  },
+  {
+    "version": "0.14.0",
+    "title": "Lobby options and spectators",
+    "body": "Restored Unit Cap and Prebuilt Units, restyled the Exclusions window, and fixed spectator names in the lobby."
+  },
+  {
+    "version": "0.13.1",
+    "title": "Map browser visibility",
+    "body": "Fixed map browser controls that could appear while the browser was closed."
+  },
+  {
+    "version": "0.13.0",
+    "title": "In-game map browser",
+    "body": "Added a six-thumbnail map browser with paging and host map selection. Settings and spectator names got more room."
+  },
+  {
+    "version": "0.12.0",
+    "title": "Native lobby redesign",
+    "body": "The lobby got a larger commander table, chat, a map and settings sidebar, and faction art."
+  },
+  {
+    "version": "0.11.0",
+    "title": "First branded game lobby",
+    "body": "Added Reforged branding to the native lobby and a Restore option for the original interface."
+  },
+  {
+    "version": "0.10.1",
+    "title": "Public server setup",
+    "body": "Added a Windows Admin wizard to set up the public community server in Docker Desktop and check local and HTTPS access separately."
+  },
+  {
+    "version": "0.10.0",
+    "title": "Automatic owner server startup",
+    "body": "Owners can start their saved account server when the client opens and stop it from Admin. The client remembers selected connections."
+  },
+  {
+    "version": "0.9.0",
+    "title": "Standalone Server Manager",
+    "body": "Added a tray app to manage a server independently of the client, remember its address and export connection files for players."
+  },
+  {
+    "version": "0.8.0",
+    "title": "Sign-in field focus",
+    "body": "Fixed password and PIN fields losing focus while the client refreshed."
+  },
+  {
+    "version": "0.7.0",
+    "title": "Accounts and Admin",
+    "body": "Added account startup, profile password changes, remembered sign-in and an owner-provisioned Admin PIN."
+  },
+  {
+    "version": "0.6.1",
+    "title": "Installer shutdown and logo",
+    "body": "Fixed a Windows installer race when the old app closes. The client and installer switched to the transparent logo."
+  },
+  {
+    "version": "0.6.0",
+    "title": "Map browser and Reforged branding",
+    "body": "Added a local map browser with search, player filters and a Host on this map button. The client got the Reforged logo and faction artwork."
+  }
+]
