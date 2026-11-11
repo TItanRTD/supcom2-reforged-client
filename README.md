@@ -17,6 +17,9 @@ construction prices, Caster recognition, and leaderboard changes.
 The [0.37.8 source update](releases/0.37.8/README.md) fixes the Jump Jet and
 Teleport range indicators.
 
+The [0.38.1 source update](releases/0.38.1/README.md) fixes the archive size
+check that blocked Reforged Balance launches and adds the Linux installer source.
+
 The playable client requires the separately distributed Reforged installer,
 its native integration resources, and a supported Steam installation of
 Supreme Commander 2. The installer, native gameplay payloads, game-derived
