@@ -20,6 +20,9 @@ Teleport range indicators.
 The [0.38.1 source update](releases/0.38.1/README.md) fixes the archive size
 check that blocked Reforged Balance launches and adds the Linux installer source.
 
+The [0.38.2 source update](releases/0.38.2/README.md) repairs the Orion and
+Javelin blueprint startup hooks and includes an import-free startup regression.
+
 The playable client requires the separately distributed Reforged installer,
 its native integration resources, and a supported Steam installation of
 Supreme Commander 2. The installer, native gameplay payloads, game-derived

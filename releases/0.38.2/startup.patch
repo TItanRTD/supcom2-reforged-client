@@ -1,0 +1,110 @@
+--- a/payload/resources/native/hud/unit-handoff-03718/bind-orion.lua
++++ b/payload/resources/native/hud/unit-handoff-03718/bind-orion.lua
+@@ -1,5 +1,6 @@
+ local installPreviousRoster = Install
+-local orion = import('/lua/sim/rf03718_orionbinding.lua')
++local orion = setmetatable({}, {__index=getfenv(1)})
++doscript('/lua/sim/rf03718_orionbinding.lua', orion)
+ local meshPrefix = '/units/illuminate/uib0101/rfihp01'
+ 
+ function Install(all, unitBlueprint, meshBlueprint, weaponBlueprint, projectileBlueprint)
+--- a/payload/resources/native/hud/unit-handoff-03721/bind-javelin.lua
++++ b/payload/resources/native/hud/unit-handoff-03721/bind-javelin.lua
+@@ -1,4 +1,5 @@
+-local javelin = import('/lua/sim/rf03721_javelinbinding.lua')
++local javelin = setmetatable({}, {__index=getfenv(1)})
++doscript('/lua/sim/rf03721_javelinbinding.lua', javelin)
+ local meshPrefix = '/units/uef/uua0102/rfujv01'
+ 
+ for _, definition in ipairs(Definitions) do
+--- a/payload/resources/native/hud/blueprint-startup.cjs
++++ b/payload/resources/native/hud/blueprint-startup.cjs
+@@ -16,4 +16,14 @@
+     return fixed === source ? bytes : Buffer.from(fixed);
+ }
+ 
+-module.exports = {fixBlueprintStartup};
++// These pure binding modules also run inside RuleInit's import-free VM.
++// Historical replays need the same loading repair while retaining their data.
++function fixUnitBindingStartup(bytes) {
++    let source = bytes.toString('utf8');
++    for (const [name, file] of [['orion', 'rf03718_orionbinding'], ['javelin', 'rf03721_javelinbinding']]) {
++        source = source.replace("local " + name + " = import('/lua/sim/" + file + ".lua')",
++            "local " + name + " = setmetatable({}, {__index=getfenv(1)})\ndoscript('/lua/sim/" + file + ".lua', " + name + ")");
++    }
++    return source === bytes.toString('utf8') ? bytes : Buffer.from(source);
++}
++module.exports = {fixBlueprintStartup, fixUnitBindingStartup};
+--- a/payload/resources/native/hud/replay-presentation.cjs
++++ b/payload/resources/native/hud/replay-presentation.cjs
+@@ -8,6 +8,7 @@
+ function compose(current,selected,originalEntries,{legacy=false,revision='current'}={}){
+  const viewerData=e=>/\/reforged_(?:research_data|construction_costs)\.lua$/.test(norm(e));
+  const selectedScripts=legacy?[]:selected.scripts.filter(e=>!isUI(norm(e))&&!viewerData(e)).map(e=>{
++  if(norm(e)==='lua/system/reforged_unit_handoff_03711.lua')return {...e,data:require('./blueprint-startup.cjs').fixUnitBindingStartup(e.data)};
+   // Recorded 0.35.x rules use their original AI, units and balance.
+   // Only the blueprint loader environment changes when those rules are replayed.
+   if(!['0350','0351'].includes(revision)||norm(e)!=='lua/system/blueprints.lua')return e;
+@@ -37,6 +38,6 @@
+  assert.equal(new Set(scripts.map(norm)).size,scripts.length,'Duplicate replay script path');
+  // Every selected non-instrumented simulation/resource entry remains exact.
+  for(const source of selectedScripts){if(audit.some(a=>a.path===norm(source)))continue;const same=scripts.find(e=>norm(e)===norm(source));assert.ok(same&&same.data.equals(source.data),'Selected replay content changed: '+source.name);}
+- return {...current,scripts,overrides,manifest:{...current.manifest,mode:'replay-presentation-0381',simulationRevision:revision,originalSimulation:legacy,stockOrders,...(stockOrders?{stockControlRevision:selected.manifest.stockControlRevision,originalBalance:true}:{}),...(selected.manifest.gameplay?{gameplay:selected.manifest.gameplay}:{}),gameplayOverrides:false,telemetryOnly:true,delegatedClasses:audit,scope:'Current replay controls/minimap with selected simulation rules preserved; replay-only statistics wrappers write private counters and UI Sync, never orders, economy, blueprints, RNG or AI behavior.'}};
++ return {...current,scripts,overrides,manifest:{...current.manifest,mode:'replay-presentation-0382',simulationRevision:revision,originalSimulation:legacy,stockOrders,...(stockOrders?{stockControlRevision:selected.manifest.stockControlRevision,originalBalance:true}:{}),...(selected.manifest.gameplay?{gameplay:selected.manifest.gameplay}:{}),gameplayOverrides:false,telemetryOnly:true,delegatedClasses:audit,scope:'Current replay controls/minimap with selected simulation rules preserved; replay-only statistics wrappers write private counters and UI Sync, never orders, economy, blueprints, RNG or AI behavior.'}};
+ }
+ module.exports={compose,isUI};
+--- a/payload/resources/native/hud/gameplay-assets.cjs
++++ b/payload/resources/native/hud/gameplay-assets.cjs
+@@ -27,14 +27,14 @@
+   result.manifest={...result.manifest,stockOrders:true,stockControlRevision:'0373',originalBalance:true,simulationRevision:'current',telemetryOnly:false,scope:'Original retail units, stats, weapons, research, AI and active conversion; Reforged order input and read-only reclaim display only. No balance loaders, extra units or passive conversion.'};
+  }
+  if(id==='reforged-balance'&&gameplay.compiler==='0379')result=require('./unit-handoff-0379/assets.cjs').apply(result);
+- if(id==='reforged-balance'&&['03711','03712','03714','03715','03716','03717','03718','03721'].includes(gameplay.compiler))result=require('./unit-handoff-03711/assets.cjs').apply(result);
+- result=require('./unit-handoff-03712/assets.cjs').apply(result,originalEntries,id==='reforged-balance'&&['03712','03714','03715','03716','03717','03718','03721'].includes(gameplay.compiler));
+- if(id==='reforged-balance'&&['03714','03715','03716','03717','03718','03721'].includes(gameplay.compiler))result=require('./unit-handoff-03714/assets.cjs').apply(result);
++ if(id==='reforged-balance'&&['03711','03712','03714','03715','03716','03717','03718','03721','0382'].includes(gameplay.compiler))result=require('./unit-handoff-03711/assets.cjs').apply(result);
++ result=require('./unit-handoff-03712/assets.cjs').apply(result,originalEntries,id==='reforged-balance'&&['03712','03714','03715','03716','03717','03718','03721','0382'].includes(gameplay.compiler));
++ if(id==='reforged-balance'&&['03714','03715','03716','03717','03718','03721','0382'].includes(gameplay.compiler))result=require('./unit-handoff-03714/assets.cjs').apply(result);
+  if(id==='reforged-balance'&&gameplay.compiler==='03715')result=require('./unit-handoff-03715/assets.cjs').apply(result);
+- if(id==='reforged-balance'&&['03716','03717','03718','03721'].includes(gameplay.compiler))result=require('./unit-handoff-03716/assets.cjs').apply(result);
+- if(id==='reforged-balance'&&['03717','03718','03721'].includes(gameplay.compiler))result=require('./unit-handoff-03717/assets.cjs').apply(result);
+- if(id==='reforged-balance'&&['03718','03721'].includes(gameplay.compiler))result=require('./unit-handoff-03718/assets.cjs').apply(result);
+- if(id==='reforged-balance'&&gameplay.compiler==='03721')result=require('./unit-handoff-03721/assets.cjs').apply(result);
++ if(id==='reforged-balance'&&['03716','03717','03718','03721','0382'].includes(gameplay.compiler))result=require('./unit-handoff-03716/assets.cjs').apply(result);
++ if(id==='reforged-balance'&&['03717','03718','03721','0382'].includes(gameplay.compiler))result=require('./unit-handoff-03717/assets.cjs').apply(result);
++ if(id==='reforged-balance'&&['03718','03721','0382'].includes(gameplay.compiler))result=require('./unit-handoff-03718/assets.cjs').apply(result);
++ if(id==='reforged-balance'&&['03721','0382'].includes(gameplay.compiler))result=require('./unit-handoff-03721/assets.cjs').apply(result);
+  if(result.manifest.unitHandoff)result=require('./unit-build-icons-03713/assets.cjs').apply(result);
+  const game={profileId:id,patchId:gameplay.id,version:gameplay.version,simulationHash:simulationHash(result),retail:id==='vanilla-1.260-iwbp'};
+  return {...result,manifest:{...result.manifest,mode:'s2r-live-gameplay-0370',gameplay:game,originalSimulation:game.retail&&!result.manifest.stockOrders,originalBalance:game.retail}};
+--- a/payload/resources/native/lobby/indexed-probe.cjs
++++ b/payload/resources/native/lobby/indexed-probe.cjs
+@@ -165,7 +165,7 @@
+     }
+   }
+   const archive = ui.writeZip(probeEntries,{compress:!!options.hud});
+-  assert.deepEqual(ui.readZip(archive,4096,['0379','03711','03712','03714','03715','03716','03717','03718','03721'].includes(options.gameplay?.compiler)), probeEntries);
++  assert.deepEqual(ui.readZip(archive,4096,['0379','03711','03712','03714','03715','03716','03717','03718','03721','0382'].includes(options.gameplay?.compiler)), probeEntries);
+   const archivePath = 'gamedata\\' + PROBE_NAME;
+   const archives = [...idx.archives, archivePath].sort();
+   const newArchiveNumber = archives.indexOf(archivePath);
+--- a/app/dist/node/server/gameplay.js
++++ b/app/dist/node/server/gameplay.js
+@@ -5,7 +5,7 @@
+ const {immutableJson}=require('./immutable-json');
+ const {ApiError}=require('./lobby');
+ const DEFAULT_PROFILE='vanilla-plus';
+-const ROSTER_COMPILER='03721';
++const ROSTER_COMPILER='0382';
+ const REFORGED_BALANCE='reforged-balance';
+ const PROFILES=Object.freeze([
+  {id:'vanilla-1.260-iwbp',name:'Vanilla + Infinite War Battle Pack',editable:false},
+@@ -15,7 +15,7 @@
+ function profile(id=DEFAULT_PROFILE){const p=PROFILES.find(p=>p.id===id);if(!p)throw new ApiError(400,'Unknown gameplay ruleset.');return p;}
+ const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+ function patchFor(profileId,version,research,compiler=profileId===REFORGED_BALANCE?ROSTER_COMPILER:'0370'){
+- if(compiler!=='0370'&&(!['0379','03711','03712','03714','03715','03716','03717','03718',ROSTER_COMPILER].includes(compiler)||profileId!==REFORGED_BALANCE))throw Error('Unsupported gameplay patch. Update the client.');
++ if(compiler!=='0370'&&(!['0379','03711','03712','03714','03715','03716','03717','03718','03721',ROSTER_COMPILER].includes(compiler)||profileId!==REFORGED_BALANCE))throw Error('Unsupported gameplay patch. Update the client.');
+  profile(profileId);
+  if(typeof version!=='string'||!/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(version))throw new ApiError(400,'Use a balance version such as 1.0.1.');
+  if(profileId==='vanilla-1.260-iwbp'&&research)throw new ApiError(400,'The original-game ruleset is read-only.');
