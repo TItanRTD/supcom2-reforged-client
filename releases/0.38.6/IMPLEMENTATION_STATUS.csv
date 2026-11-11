@@ -1,0 +1,37 @@
+id,requirement,runtime_location,status,native_validation
+N01,Separate weapons against units from projectile interception,catalog; effective,implemented with controlled checks; native qualification pending,not run
+N02,Make tactical replacement safe when the actor has a recent command,tasks; operations,implemented with controlled checks; native qualification pending,not run
+N03,Acknowledge production by actual producer lineage,tasks,implemented with controlled checks; native qualification pending,not run
+N04,Separate mission ownership from immediate tactical action,director; operations,implemented with controlled checks; native qualification pending,not run
+N05,Arbitrate allied requests using available helper capacity,teamplay; director,implemented with controlled checks; native qualification pending,not run
+N06,Reconcile research payment and doctrine spending,controller; director,implemented with controlled checks; native qualification pending,not run
+N07,Validate reconnaissance/combat roles and current native command capability,catalog; effective; operations,implemented with controlled checks; native qualification pending,not run
+F01,Service active fights before background work and bound local contact selection,frame; effective; operations; controller,implemented with controlled checks; native qualification pending,not run
+F02,Apply earned numerical capabilities and exact weapon layers,catalog; frame; effective,implemented with controlled checks; native qualification pending,not run
+F03,Choose reachable retreat routes with lower local exposure,operations.SafeRetreat,implemented with controlled checks; native qualification pending,not run
+F04,Use persistent local groups and reinforcement arrival,operations.RefreshOperations; LocalSupport; FighterCover,implemented with controlled checks; native qualification pending,not run
+F05,Respect firing states and observe actual launches,operations.Micro; projectile launch/impact delegates,implemented with controlled checks; native qualification pending,not run
+F06,Add urgent ACU ability-aware review,operations.Micro; Special; controller; tasks,implemented with controlled checks; native qualification pending,not run
+F07,Connect confirmed research to a prepared affordable group action,operations.GroupMobility; Ability,implemented with controlled checks; native qualification pending,not run
+F08,Classify missile pressure and protection accurately,catalog; planning; FactoryAddon,implemented with controlled checks; native qualification pending,not run
+F09,Evaluate legal factory modules and existing sensor coverage,operations.FactoryAddon; InformationNeed,implemented with controlled checks; native qualification pending,not run
+F10,Use active research prerequisite semantics,planning.ResearchPath; doctrine,implemented with controlled checks; native qualification pending,not run
+F11,Preserve safe field-work handoff and bounded expansion risk,controller field/reclaim helpers; operations.Forces,implemented with controlled checks; native qualification pending,not run
+V01,Validate native cap accounting with zero-cap factory modules,No speculative engine accounting/identity change,deferred to native playtest,not run
+V02,Validate coastal movement and specialized unit roles,No speculative engine accounting/identity change,deferred to native playtest,not run
+NE01,Bootstrap faction-appropriate water operations,operations.NavalBootstrap,implemented with controlled checks; native qualification pending,not run
+NE02,Retain movement-class provenance for map reachability,controller opening/path; topology,implemented with controlled checks; native qualification pending,not run
+NE03,"Separate production capability, output domains and physical layer",catalog.Build; controller production,implemented with controlled checks; native qualification pending,not run
+NE04,Recover compatible experimental production and cover earned targets,campaign deployment,implemented with controlled checks; native qualification pending,not run
+NE05,Model scripted and delegated attack capability,catalog scripted profiles; operations.Special,implemented with controlled checks; native qualification pending,not run
+NE06,Respect script-managed subunit control ownership,catalog.controlled; effective.Command,implemented with controlled checks; native qualification pending,not run
+NE07,Implement legal deployment and relocation states,effective.Owned; operations.Special,implemented with controlled checks; native qualification pending,not run
+NE08,Read actual support-ability costs and reserve pending activation,catalog abilityRules; operations.Ability,implemented with controlled checks; native qualification pending,not run
+NE09,Value early release and unstable readiness explicitly,effective.Owned; operations recovery/readiness,implemented with controlled checks; native qualification pending,not run
+NE10,Apply current firing layer and movement-mode transitions,effective per-weapon/current layer; controller path cache,implemented with controlled checks; native qualification pending,not run
+N08,Match local survival defense to incoming attack domains,operations.DomainPressure; director,implemented with controlled checks; native qualification pending,not run
+N09,Preserve withdrawal recovery and evaluate mobile repair,operations recovery; Repair,implemented with controlled checks; native qualification pending,not run
+N10,Evaluate legal outputs of owned foreign producers,controller production; frame.Quote,implemented with controlled checks; native qualification pending,not run
+N11,Reconcile contact hypotheses across sensor identity transitions,knowledge aliases; frame.Observe,implemented with controlled checks; native qualification pending,not run
+N12,Tie uncertainty and information research to relevant objectives,operations.InformationNeed; campaign; director,implemented with controlled checks; native qualification pending,not run
+V03,Validate ownership transfer identity and stale hostility removal,No speculative engine accounting/identity change,deferred to native playtest,not run

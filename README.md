@@ -32,6 +32,9 @@ startup crash and adds a regression without Lua string method support.
 The [0.38.5 source update](releases/0.38.5/README.md) repairs deferred opening
 routes and checks paid factory construction and unit production across presets.
 
+The [0.38.6 source update](releases/0.38.6/README.md) fixes saved-interface
+verification timeouts and bounds managed cache recovery.
+
 The playable client requires the separately distributed Reforged installer,
 its native integration resources, and a supported Steam installation of
 Supreme Commander 2. The installer, native gameplay payloads, game-derived

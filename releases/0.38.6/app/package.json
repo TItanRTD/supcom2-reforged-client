@@ -1,0 +1,15 @@
+{
+  "name": "supcom2-reforged-client",
+  "version": "0.38.6",
+  "private": true,
+  "description": "Supreme Commander 2: Reforged community client",
+  "author": "TitanRT",
+  "license": "MIT",
+  "main": "dist/node/desktop/main.js",
+  "engines": {
+    "node": ">=24.15 <25"
+  },
+  "dependencies": {
+    "nodemailer": "10.2.1"
+  }
+}

@@ -1,0 +1,11 @@
+'use strict';
+const assert=require('node:assert/strict');
+const old=require('../work-0385/payload/resources/native/lobby/supcom2-ui.cjs');
+const current=require('./payload/resources/native/lobby/supcom2-ui.cjs');
+const entries=Array.from({length:64},(_,i)=>({name:'test/entry-'+i,data:Buffer.alloc(8192,i)}));
+const packed=[],verified=[];
+const a=old.writeZip(entries,{compress:true}),b=current.writeZip(entries,{compress:true,onProgress:(n,total)=>packed.push({n,total})});
+assert.deepEqual(a,b);assert.deepEqual(current.readZip(b,100,false,(n,total)=>verified.push({n,total})),entries);
+assert.deepEqual(packed.at(-1),{n:64,total:64});assert.deepEqual(verified.at(-1),{n:64,total:64});
+for(const list of[packed,verified])assert.ok(list.every((v,i)=>v.n>=1&&v.n<=v.total&&(!i||v.n>list[i-1].n)));
+console.log('Real compression/CRC progress callbacks report completed entries without changing archive bytes.');

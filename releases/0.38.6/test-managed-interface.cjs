@@ -1,0 +1,50 @@
+'use strict';
+// Full archive + managed-directory recovery; a synthetic EXE is never executed.
+const fs=require('node:fs/promises'),sync=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const root=__dirname,native=path.join(root,'payload/resources/native'),desktop=path.join(root,'app/dist/node/desktop');
+const {prepareSteamRuntime}=require(desktop+'/steam-runtime.js');
+const {promoteRuntime}=require(desktop+'/runtime-promotion.js');
+const {prepareLobbyAssets}=require(desktop+'/native-lobby.js');
+const {patchFor}=require('./app/dist/node/server/gameplay.js');
+const {rulesetFor}=require('./app/dist/node/server/research-publication.js');
+const builder=require(native+'/lobby/indexed-probe.cjs');
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const inputs=['ui.scd','toc.win.bdf','ui.scd.enc'].map(n=>sync.readFileSync(path.join(root,'../orion-base/retail',n)));
+const hud=sync.readFileSync(path.join(root,'../orion-base/retail/lua.scd'));
+const art=native+'/lobby/art';const textures=require(art+'/art-manifest.json').textures.map(t=>({name:'textures/ui/common/pc/frontend/'+t.name,data:sync.readFileSync(path.join(art,t.name))}));
+const draft=structuredClone(require('./app/dist/node/server/data/research-retail.json').draft);draft.title='Managed recovery research';draft.nodes.find(n=>n.id==='ULB_RANGE').cost=4;
+const research=rulesetFor(draft),game=patchFor('reforged-balance','1.0.0',research,undefined,'evidence-ai-6');
+(async()=>{
+ const base=await fs.mkdtemp(path.join(os.tmpdir(),'reforged-managed-recovery-'));
+ const originalBuild=builder.build;const builds=[];const progress=[];
+ try{
+  const source=path.join(base,'steamapps/common/SupCom2'),exe=path.join(source,'bin/SupremeCommander2.exe'),runs=path.join(base,'client/logs');
+  await fs.mkdir(path.dirname(exe),{recursive:true});await fs.mkdir(path.join(source,'gamedata'));await fs.mkdir(runs,{recursive:true});
+  for(const [name,data]of[['bin/SupremeCommander2.exe',Buffer.from('test fixture; never executed')],['toc.win.bdf',inputs[1]],['gamedata/ui.scd',inputs[0]],['gamedata/ui.scd.enc',inputs[2]],['gamedata/lua.scd',hud],['gamedata/_Map_preserved_name.scd',Buffer.from('test map')]])await fs.writeFile(path.join(source,name),data);
+  const sourceHashes=Object.fromEntries(await Promise.all(['bin/SupremeCommander2.exe','toc.win.bdf','gamedata/ui.scd','gamedata/ui.scd.enc','gamedata/lua.scd','gamedata/_Map_preserved_name.scd'].map(async n=>[n,hash(await fs.readFile(path.join(source,n)))])));
+  const oldRoot=path.dirname(path.dirname(await prepareSteamRuntime(exe,native,runs,false,()=>{},research.id)));
+  const older=require(native+'/lobby/indexed-probe-v0385.cjs').build(...inputs,{layout:true,textures,hud,hudScale:1.125,playerBadges:true,research,gameplay:game});
+  const state=path.join(oldRoot,'revival-prepared/reforged-lobby-v1');await fs.mkdir(state,{recursive:true});
+  await fs.writeFile(path.join(oldRoot,'toc.win.bdf'),older.toc);await fs.writeFile(path.join(oldRoot,'gamedata',builder.PROBE_NAME),older.archive);
+  await fs.writeFile(path.join(state,'lobby-manifest.json'),JSON.stringify(older.manifest));await fs.writeFile(path.join(state,'published-gameplay.json'),JSON.stringify(game));await fs.writeFile(path.join(state,'published-research.json'),JSON.stringify(research));await fs.writeFile(path.join(oldRoot,'keep-user-note.txt'),'preserve this file');
+  builder.build=(...args)=>{builds.push(args[3]?.hud?'hud':'control');return originalBuild(...args);};
+  const onProgress=(stage,detail)=>{progress.push({stage,detail});if(['preparing-reset-interface','preparing-check-requested-interface'].includes(stage))console.log(stage,detail);};
+  const run=(dir,expected)=>prepareLobbyAssets(dir,native,true,true,1.125,false,onProgress,research,expected,true,undefined,false,undefined,game);
+  await assert.rejects(run(oldRoot),e=>e.code==='S2R_INTERFACE_UNKNOWN');assert.equal(builds.filter(n=>n==='hud').length,1);
+  assert.equal(hash(await fs.readFile(path.join(oldRoot,'toc.win.bdf'))),hash(older.toc));assert.equal(hash(await fs.readFile(path.join(oldRoot,'gamedata',builder.PROBE_NAME))),hash(older.archive));
+  const freshRoot=path.dirname(path.dirname(await prepareSteamRuntime(exe,native,runs,false,onProgress,research.id,true)));assert.notEqual(freshRoot,oldRoot);
+  const prepared=await run(freshRoot);assert.equal(prepared.hud.gameplay.patchId,game.id);assert.equal(prepared.hud.gameplay.simulationHash,older.manifest.hud.gameplay.simulationHash);
+  assert.equal(builds.filter(n=>n==='hud').length,1,'Fresh retry must reuse the verified generated target from this worker');
+  const stable=await promoteRuntime(freshRoot,oldRoot);assert.equal(stable,oldRoot);
+  const archive=(await fs.readdir(path.dirname(stable))).find(n=>n.startsWith(path.basename(stable).slice(0,16)+'-archive-'));assert.ok(archive);
+  const retained=path.join(path.dirname(stable),archive);assert.equal(await fs.readFile(path.join(retained,'keep-user-note.txt'),'utf8'),'preserve this file');
+  assert.equal(hash(await fs.readFile(path.join(retained,'gamedata',builder.PROBE_NAME))),hash(older.archive));
+  for(const [name,expected]of Object.entries(sourceHashes))assert.equal(hash(await fs.readFile(path.join(source,name))),expected,name);
+  assert.equal(await fs.readFile(path.join(stable,'gamedata/_Map_preserved_name.scd'),'utf8'),'test map');
+  const count=builds.length;await run(stable,prepared.cache);assert.equal(builds.length,count,'Warm proof unexpectedly rebuilt');
+  assert.ok(progress.some(v=>v.stage==='preparing-interface-work'&&v.detail.startsWith('Packing interface files ')));
+  assert.ok(progress.some(v=>v.stage==='preparing-interface-work'&&v.detail.startsWith('Checking interface files ')));
+  assert.ok(!progress.some(v=>v.stage==='preparing-check-older-interface'));
+  console.log('Recovered a full older AI6/research archive in one target build; retained old files, original game inputs, map names, stable directory and warm cache.');
+ }finally{builder.build=originalBuild;await fs.rm(base,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1});
